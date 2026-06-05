@@ -1,0 +1,318 @@
+{
+  "name": "BA/SA Assistant — Orchestrator Chat",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "chat-trigger",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse chat input and classify intent\nconst input = $input.first().json;\nconst message = (input.message || input.text || '').toLowerCase();\n\nlet intent = 'GENERAL_CHAT';\nconst docKeywords = ['create document', 'write requirements', 'system design', 'generate doc', 'draft document', 'create srs', 'create sdd', 'requirements doc', 'design doc', 'document for', 'spec for'];\nconst ragKeywords = ['what is', 'how does', 'explain', 'tell me about', 'what are', 'describe', 'api for', 'endpoint for', 'architecture of', 'how do'];\n\nif (docKeywords.some(kw => message.includes(kw))) {\n  intent = 'CREATE_DOCUMENT';\n} else if (ragKeywords.some(kw => message.startsWith(kw)) || message.endsWith('?')) {\n  intent = 'RAG_QUERY';\n}\n\nreturn [{\n  json: {\n    sessionId: input.sessionId || input.metadata?.sessionId || 'session_' + Date.now(),\n    userMessage: input.message || input.text || '',\n    intent: intent,\n    attachments: input.attachments || input.files || [],\n    chatInput: input,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "parse-input",
+      "name": "Parse Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ba_sa_sessions (session_id, user_id, status, context, created_at, updated_at) VALUES ($1, $2, 'active', $3, NOW(), NOW()) ON CONFLICT (session_id) DO UPDATE SET context = EXCLUDED.context, updated_at = NOW() RETURNING *;",
+        "options": {}
+      },
+      "id": "manage-session",
+      "name": "Manage Session",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        620,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-default",
+          "name": "Postgres Default"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Assemble context for routing\nconst session = $input.first().json;\nconst input = $input.first().json;\n\nreturn [{\n  json: {\n    sessionId: input.sessionId,\n    userMessage: input.userMessage,\n    intent: input.intent,\n    attachments: input.attachments,\n    timestamp: input.timestamp\n  }\n}];"
+      },
+      "id": "assemble-context",
+      "name": "Assemble Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "value": "RAG_QUERY",
+              "output": 0
+            },
+            {
+              "value": "CREATE_DOCUMENT",
+              "output": 1
+            }
+          ]
+        },
+        "dataType": "string",
+        "value1": "={{ $json.intent }}",
+        "fallbackOutput": 2
+      },
+      "id": "route-intent",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.WORKFLOW_ID_RAG_AGENT }}",
+        "options": {}
+      },
+      "id": "call-rag",
+      "name": "Call RAG Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1220,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.WORKFLOW_ID_DOC_ORCHESTRATOR }}",
+        "options": {}
+      },
+      "id": "call-doc",
+      "name": "Call Doc Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1220,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "window-memory",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.1,
+      "position": [
+        1020,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "model": "={{ $env.LLM_MODEL }}",
+        "options": {
+          "baseURL": "={{ $env.LLM_BASE_URL }}"
+        }
+      },
+      "id": "llm",
+      "name": "LLM",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        1220,
+        520
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-onprem",
+          "name": "OpenAI On-Premise"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are an AI assistant for Business Analysts and System Analysts.\n\nYour role is to engage in natural, helpful conversation. You can:\n- Answer general questions about systems, APIs, architectures, and business processes\n- Guide users through their analytical work\n- Help users articulate what they need before creating documents\n- Ask clarifying questions when the user's request is unclear\n\nGuidelines:\n- Be concise, professional, and friendly\n- Use Markdown formatting when helpful\n- If the user wants to create a document, help them articulate requirements clearly\n- If the user has a specific question about existing systems, be honest about what you don't know\n- Remember context from the ongoing conversation\n- Do not hallucinate information about internal systems\n\nThe user's message will be routed to specialized agents automatically if it matches specific patterns:\n- Questions ending with ? or starting with \"what is\", \"how does\", \"explain\" → RAG agent\n- Requests to create documents → Document pipeline\n- Everything else → you handle directly",
+          "maxIterations": 5
+        }
+      },
+      "id": "orchestrator-agent",
+      "name": "Orchestrator Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [
+        1220,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format final response for chat\nconst result = $input.first().json;\n\nlet responseText = result.response || result.output || result.text || result.content || '';\nif (typeof responseText === 'object') {\n  responseText = responseText.text || responseText.content || responseText.message || JSON.stringify(responseText);\n}\n\nlet footer = '';\nif (result.documentId) {\n  footer = `\\n\\n---\\n📄 **Document draft created**: ${result.title || 'Untitled'}\\n🆔 Draft ID: ${result.documentId}\\n⏳ Awaiting your review...`;\n}\n\nreturn [{\n  json: {\n    response: responseText + footer,\n    sessionId: result.sessionId,\n    intent: result.intent\n  }\n}];"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1420,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Input": {
+      "main": [
+        [
+          {
+            "node": "Manage Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manage Session": {
+      "main": [
+        [
+          {
+            "node": "Assemble Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Context": {
+      "main": [
+        [
+          {
+            "node": "Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Intent": {
+      "main": [
+        [
+          {
+            "node": "Call RAG Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call Doc Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Orchestrator Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call RAG Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Doc Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Orchestrator Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Orchestrator Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Orchestrator Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    "ba-sa-assistant",
+    "orchestrator",
+    "chat",
+    "multi-agent"
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "version": "1.0",
+  "redlines": [
+    {
+      "id": "RL-001",
+      "category": "Medical Claims",
+      "description": "No medical/therapeutic claims implying diagnosis/treatment/cure",
+      "severity": "critical",
+      "action": "flag_for_hitl"
+    },
+    {
+      "id": "RL-002",
+      "category": "Alcohol Age Targeting",
+      "description": "No under-21 targeting or youth-appeal content for alcohol",
+      "severity": "critical",
+      "action": "flag_for_hitl"
+    },
+    {
+      "id": "RL-003",
+      "category": "Political Content",
+      "description": "No election/political content during voting periods",
+      "severity": "critical",
+      "action": "flag_for_hitl"
+    },
+    {
+      "id": "RL-004",
+      "category": "Religious/Cultural Sensitivity",
+      "description": "No sensitive religious/cultural references without human legal/comms review",
+      "severity": "critical",
+      "action": "flag_for_hitl"
+    },
+    {
+      "id": "RL-005",
+      "category": "Data Processing",
+      "description": "No cross-border personal data processing without residency/compliance checks",
+      "severity": "critical",
+      "action": "flag_for_hitl"
+    },
+    {
+      "id": "RL-006",
+      "category": "Biometric Data",
+      "description": "No biometric/face recognition or identity inference",
+      "severity": "critical",
+      "action": "flag_for_hitl"
+    },
+    {
+      "id": "RL-007",
+      "category": "Financial Advice",
+      "description": "No financial advice/credit promises without licensed approvals",
+      "severity": "critical",
+      "action": "flag_for_hitl"
+    },
+    {
+      "id": "RL-008",
+      "category": "Prohibited Categories",
+      "description": "No gambling/tobacco and other high-risk categories",
+      "severity": "critical",
+      "action": "flag_for_hitl"
+    },
+    {
+      "id": "RL-009",
+      "category": "Comparative Advertising",
+      "description": "No comparative ads naming competitors where restricted",
+      "severity": "critical",
+      "action": "flag_for_hitl"
+    },
+    {
+      "id": "RL-010",
+      "category": "Environmental Claims",
+      "description": "No environmental ('green') claims without verifiable substantiation",
+      "severity": "critical",
+      "action": "flag_for_hitl"
+    }
+  ]
+}

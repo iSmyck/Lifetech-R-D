@@ -1,0 +1,39 @@
+- generic [ref=e5]:
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - img [ref=e8]
+      - text: AI-native marketing workspace
+    - heading "What are we building today?" [level=1] [ref=e11]
+    - paragraph [ref=e12]: Launch campaigns, write content, analyze competitors — with agents that think and work alongside you.
+  - generic [ref=e13]:
+    - textbox "Describe your campaign, content, or strategy..." [ref=e14]
+    - generic [ref=e15]:
+      - button [ref=e17]:
+        - img [ref=e18]
+      - button "Run" [disabled] [ref=e21]:
+        - img [ref=e22]
+        - text: Run
+  - generic [ref=e25]:
+    - button "Email campaign Write a 3-email nurture sequence for onboarding" [ref=e26]:
+      - img [ref=e28]
+      - generic [ref=e31]:
+        - generic [ref=e32]: Email campaign
+        - generic [ref=e33]: Write a 3-email nurture sequence for onboarding
+    - button "Social content Create a week of LinkedIn posts about product launches" [ref=e34]:
+      - img [ref=e36]
+      - generic [ref=e42]:
+        - generic [ref=e43]: Social content
+        - generic [ref=e44]: Create a week of LinkedIn posts about product launches
+    - button "Competitive analysis Analyze our top 3 competitors positioning" [ref=e45]:
+      - img [ref=e47]
+      - generic [ref=e49]:
+        - generic [ref=e50]: Competitive analysis
+        - generic [ref=e51]: Analyze our top 3 competitors positioning
+    - button "Landing page Write landing page copy for our new feature" [ref=e52]:
+      - img [ref=e54]
+      - generic [ref=e57]:
+        - generic [ref=e58]: Landing page
+        - generic [ref=e59]: Write landing page copy for our new feature
+  - generic [ref=e60]:
+    - paragraph [ref=e61]: Or pick up where you left off — your projects and threads are saved.
+    - button "Go to workspace" [ref=e62]

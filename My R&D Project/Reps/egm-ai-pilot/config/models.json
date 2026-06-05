@@ -1,0 +1,51 @@
+{
+  "agents": {
+    "coordinator": {
+      "model": "claude-3-5-sonnet-20241022",
+      "max_tokens": 4096,
+      "temperature": 0.3,
+      "provider": "aws_bedrock"
+    },
+    "router": {
+      "model": "claude-3-5-haiku-20241022",
+      "max_tokens": 2048,
+      "temperature": 0.1,
+      "provider": "aws_bedrock"
+    },
+    "localization": {
+      "model": "claude-3-5-sonnet-20241022",
+      "max_tokens": 4096,
+      "temperature": 0.5,
+      "provider": "aws_bedrock"
+    },
+    "governance": {
+      "model": "claude-3-5-sonnet-20241022",
+      "max_tokens": 4096,
+      "temperature": 0.1,
+      "provider": "aws_bedrock"
+    },
+    "performance": {
+      "model": "claude-3-5-haiku-20241022",
+      "max_tokens": 3072,
+      "temperature": 0.2,
+      "provider": "aws_bedrock"
+    },
+    "content_generation": {
+      "model": "claude-3-5-sonnet-20241022",
+      "max_tokens": 4096,
+      "temperature": 0.7,
+      "provider": "aws_bedrock"
+    },
+    "validation": {
+      "model": "claude-3-5-haiku-20241022",
+      "max_tokens": 2048,
+      "temperature": 0.0,
+      "provider": "aws_bedrock"
+    }
+  },
+  "fallback": {
+    "model": "claude-3-5-haiku-20241022",
+    "max_tokens": 2048,
+    "temperature": 0.3
+  }
+}

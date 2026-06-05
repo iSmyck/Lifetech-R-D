@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EGM AI Query Input",
+  "description": "Input schema for submitting a query to the EGM AI platform",
+  "type": "object",
+  "required": ["user_query"],
+  "properties": {
+    "user_query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 10000,
+      "description": "The user's marketing intelligence request"
+    },
+    "query_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Optional client-generated query ID"
+    },
+    "user_context": {
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "language_preference": { "type": "string", "default": "en" },
+        "market_focus": { "type": "string" }
+      }
+    },
+    "additional_parameters": {
+      "type": "object",
+      "properties": {
+        "urgency": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "default": "medium"
+        },
+        "output_format_preference": {
+          "type": "string",
+          "enum": ["markdown", "json", "text"],
+          "default": "json"
+        }
+      }
+    }
+  }
+}

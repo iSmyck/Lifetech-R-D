@@ -1,0 +1,397 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "availableInChat": true,
+        "options": {}
+      },
+      "id": "ee1495fd-9401-4d33-af8e-c639a79bf180",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -672,
+        1472
+      ],
+      "webhookId": "f0db14cb-45c4-49ba-bf0b-0c5400db2841"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse chat input and classify intent\nconst input = $input.first().json;\nconst message = (input.message || input.text || '').toLowerCase();\n\nlet intent = 'GENERAL_CHAT';\nconst docKeywords = ['create document', 'write requirements', 'system design', 'generate doc', 'draft document', 'create srs', 'create sdd', 'requirements doc', 'design doc', 'document for', 'spec for'];\nconst ragKeywords = ['what is', 'how does', 'explain', 'tell me about', 'what are', 'describe', 'api for', 'endpoint for', 'architecture of', 'how do'];\n\nif (docKeywords.some(kw => message.includes(kw))) {\n  intent = 'CREATE_DOCUMENT';\n} else if (ragKeywords.some(kw => message.startsWith(kw)) || message.endsWith('?')) {\n  intent = 'RAG_QUERY';\n}\n\nreturn [{\n  json: {\n    sessionId: input.sessionId || input.metadata?.sessionId || 'session_' + Date.now(),\n    userMessage: input.message || input.text || '',\n    intent: intent,\n    attachments: input.attachments || input.files || [],\n    chatInput: input,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "72ea48aa-0a76-4d5e-b8e9-d3a53541bd49",
+      "name": "Parse Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        1472
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO \"BA Agent\".ba_sa_sessions (session_id, user_id, status, context, created_at, updated_at) \nVALUES (\n  '{{ $json.sessionId }}', \n  '{{ $json.userId ?? \"unknown\" }}', \n  'active', \n  '{{ JSON.stringify($json) }}'::jsonb,\n  NOW(), \n  NOW()\n) \nON CONFLICT (session_id) \nDO UPDATE SET context = EXCLUDED.context, updated_at = NOW() \nRETURNING *;",
+        "options": {}
+      },
+      "id": "3071f517-5157-4491-aafa-f037f8e78546",
+      "name": "Manage Session",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -256,
+        1488
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "x8X38DlslzAtpIlO",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "55e26a1d-1bff-4005-bae5-e22b4d986209",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1,
+      "position": [
+        288,
+        1920
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "x8X38DlslzAtpIlO",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format final response for chat\nconst result = $input.first().json;\n\nlet responseText = result.response || result.output || result.text || result.content || '';\nif (typeof responseText === 'object') {\n  responseText = responseText.text || responseText.content || responseText.message || JSON.stringify(responseText);\n}\n\nlet footer = '';\nif (result.documentId) {\n  footer = `\\n\\n---\\n📄 **Document draft created**: ${result.title || 'Untitled'}\\n🆔 Draft ID: ${result.documentId}\\n⏳ Awaiting your review...`;\n}\n\nreturn [{\n  json: {\n    response: responseText + footer,\n    sessionId: result.sessionId,\n    intent: result.intent\n  }\n}];"
+      },
+      "id": "05b69699-44f1-4bcc-ac4b-9e360efdea82",
+      "name": "Format Response1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        1504
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ff449cc6-7ca5-442c-9b6f-b4998a717323",
+              "name": "message.session_id",
+              "value": "={{ $json.session_id }}",
+              "type": "string"
+            },
+            {
+              "id": "acac420b-e764-448b-9464-75c2a6ffb2d9",
+              "name": "message.user_id",
+              "value": "={{ $json.user_id }}",
+              "type": "string"
+            },
+            {
+              "id": "43956c9a-6921-4542-bfc4-4fefeec1033e",
+              "name": "message.intent",
+              "value": "={{ $json.context.intent }}",
+              "type": "string"
+            },
+            {
+              "id": "06c1b739-ba68-4360-bea4-7173f5100975",
+              "name": "message.chatInput",
+              "value": "={{ $json.context.chatInput.chatInput }}",
+              "type": "string"
+            },
+            {
+              "id": "07f9a88f-5134-48a5-98a3-7df29502f58b",
+              "name": "message.attachments",
+              "value": "={{ $json.context.attachments }}",
+              "type": "array"
+            },
+            {
+              "id": "3035222b-5847-43f7-9e89-ea3ed76c9ba1",
+              "name": "message.timestamp",
+              "value": "={{ $json.context.timestamp }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -48,
+        1488
+      ],
+      "id": "d4070ca1-ff0d-47e4-9473-41bc752aa8fa",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message }}",
+        "options": {
+          "systemMessage": "You are the Orchestrator Agent for a Business Analyst Assistant system. Your role is to understand user requests and route them to the appropriate specialized agent.\n\n## Available Routing Targets\n1. **RAG Agent** (route_to_rag_agent tool) - Use when the user asks questions about existing knowledge: APIs, system functionality, business rules, past requirements, or any factual question answerable from the knowledge base.\n2. **Document Creation Agent** (route_to_document_agent tool) - Use when the user wants to create documentation: requirements documents (BRD, SRS, PRD), system design documents (SDD), architecture documents, or any structured document.\n3. **Clarify** - Use when the request is ambiguous and you need more information before routing.\n\n## Guidelines\n- Analyze the user's intent carefully\n- Extract key requirements from the request\n- If meeting notes, Jira tickets, or files are mentioned, note the references\n- Always use the appropriate route tool to delegate - never answer domain questions yourself\n- Keep responses brief and professional\n- For document creation requests, ALWAYS use route_to_document_agent tool\n- For knowledge questions, ALWAYS use route_to_rag_agent tool\n- For Jira data needs, use fetch_jira_context tool first to gather context"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        320,
+        1472
+      ],
+      "id": "b948b0c8-1926-4d64-ba0f-aec6815634d9",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "description": "Route the user's question to the RAG (Retrieval-Augmented Generation) Agent. Use this tool when the user asks factual questions about existing systems, APIs, business rules, requirements, or any knowledge-base query. The RAG agent will search the knowledge base and provide an evidence-based answer with cited sources. \nRoute the user's question to the RAG Agent. You MUST pass the user's exact question as a string value to the \"query\" key. Do not output the schema.\n\nRoute the user's question to the RAG Agent. Use this tool when the user asks factual questions about existing systems, APIs, business rules, requirements, or any knowledge-base query. \n\nCRITICAL INSTRUCTION: Your input to this tool MUST be a valid JSON object with exactly one key \"query\" containing the user's question as a string value. Do not output anything else.\nExample input: {\"query\": \"Where is the payments API?\"}\n\nInput: provide the user's query as a string. \nOutput: { answer: string, sources: string[], confidence: string }.",
+        "workflowId": {
+          "__rl": true,
+          "value": "om8h0hUo7XXcOnWk",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/om8h0hUo7XXcOnWk",
+          "cachedResultName": "BA/SA Assistant — RAG Researcher (Tools + Structured)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "query": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('query', ``, 'string') }}",
+            "sessionId": "={{ $json.message.session_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "sessionId",
+              "displayName": "sessionId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        1920
+      ],
+      "id": "7b316f24-6dd3-47f9-bf13-1d34254f7d55",
+      "name": "route_to_rag_agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "Qwen3.6:27b",
+          "mode": "list",
+          "cachedResultName": "Qwen3.6:27b"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        1712
+      ],
+      "id": "cdd056ac-a457-4231-9a01-d79401502b46",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "6bTEyGq8S10ETYSX",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Route the user's request to the Document Creation Agent. Use this tool when the user wants to create any type of business or system documentation: requirements documents (BRD, SRS, SDD, PRD), system design documents, architecture documents, user stories, or technical specifications. The agent can use meeting notes, Jira tickets, uploaded files, and knowledge base as inputs. Output: { document: object, diagrams: string[], preview_url: string }.",
+        "workflowId": {
+          "__rl": true,
+          "value": "VRFXj9WgHHGzARYz",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/VRFXj9WgHHGzARYz",
+          "cachedResultName": "BA/SA Assistant — Document Orchestrator"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "query": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('query', ``, 'string') }}",
+            "sessionId": "={{ $json.message.session_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "sessionId",
+              "displayName": "sessionId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        592,
+        1680
+      ],
+      "id": "5a60a63e-266e-4198-b253-b8b780d31ad0",
+      "name": "route_to_document_agent"
+    }
+  ],
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Input": {
+      "main": [
+        [
+          {
+            "node": "Manage Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manage Session": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "route_to_rag_agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "route_to_document_agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "Chat Trigger": [
+      {
+        "sessionId": "c57363db54f24fd6867fc8849c8891c1",
+        "action": "sendMessage",
+        "chatInput": "напиши мне дизайн по интеграции платёжного гейтвея в ecomm портал"
+      }
+    ]
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dbcdf4240176c5813914527d67a16d32167efe192158d1699f75be3eff32c81b"
+  }
+}

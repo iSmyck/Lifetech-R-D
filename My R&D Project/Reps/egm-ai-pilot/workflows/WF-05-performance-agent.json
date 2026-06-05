@@ -1,0 +1,79 @@
+{
+  "name": "WF-05 Performance Agent",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "id": "assemble-context",
+      "name": "Assemble Performance Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "parameters": {
+        "jsCode": "// Load performance prompt + media-optimization skill\nconst input = $input.first().json;\nconst context = {\n  system_prompt: '{{ performance prompt }}',\n  skill: '{{ media-optimization skill }}',\n  marketing_objective: input.marketing_objective || '',\n  target_audience: input.target_audience || {},\n  product_service_category: input.product_service_category || '',\n  current_budget_constraints: input.current_budget_constraints || {},\n  platforms_of_interest: input.platforms_of_interest || [],\n  campaign_duration: input.campaign_duration || '',\n  query_id: input.query_id\n};\nreturn { json: context };"
+      }
+    },
+    {
+      "id": "media-analysis",
+      "name": "Media Analysis (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [600, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_BASE_URL }}/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "claude-3-5-haiku-20241022",
+          "max_tokens": 3072,
+          "temperature": 0.2,
+          "system": "You are the Performance / Media Agent. Provide platform analysis and media recommendations. Output JSON only.",
+          "messages": [{"role": "user", "content": "={{ JSON.stringify($json) }}"}]
+        }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "llm-auth", "name": "LLM Auth" } }
+    },
+    {
+      "id": "validate-output",
+      "name": "Validate Output Schema",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "parameters": {
+        "jsCode": "// Validate against performance-output schema\nconst response = $input.first().json;\nconst content = response.content?.[0]?.text || response.content || '{}';\nlet output;\ntry {\n  output = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (e) {\n  output = { query_id: $json.query_id, error: 'Invalid JSON output' };\n}\noutput.agent_name = 'performance';\noutput.model_used = 'claude-3-5-haiku-20241022';\nreturn { json: output };"
+      }
+    },
+    {
+      "id": "return",
+      "name": "Return to Router",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [1000, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [[{"node": "Assemble Performance Context", "type": "main", "index": 0}]]
+    },
+    "Assemble Performance Context": {
+      "main": [[{"node": "Media Analysis (LLM)", "type": "main", "index": 0}]]
+    },
+    "Media Analysis (LLM)": {
+      "main": [[{"node": "Validate Output Schema", "type": "main", "index": 0}]]
+    },
+    "Validate Output Schema": {
+      "main": [[{"node": "Return to Router", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Coordinator Output",
+  "description": "Output schema for the Coordinator / Main Orchestrator agent",
+  "type": "object",
+  "required": ["query_id", "final_response", "response_summary", "executed_agents", "review_status", "timestamp"],
+  "properties": {
+    "query_id": { "type": "string", "format": "uuid" },
+    "final_response": { "type": "string", "description": "Complete synthesized response to user" },
+    "response_summary": { "type": "string", "description": "Brief summary of the response" },
+    "executed_agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["agent_name", "status", "output_summary"],
+        "properties": {
+          "agent_name": { "type": "string" },
+          "status": { "type": "string", "enum": ["completed", "failed", "reviewed"] },
+          "output_summary": { "type": "string" }
+        }
+      }
+    },
+    "review_status": { "type": "string", "enum": ["approved", "needs_review", "rejected", "N/A"] },
+    "timestamp": { "type": "string", "format": "date-time" }
+  }
+}

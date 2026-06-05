@@ -1,0 +1,3 @@
+[     179ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/chunk-YZVM2MHU.js?v=9ca1f078:21550
+[   21672ms] [LOG] simulate called {content: Test message, outputType: null, activeThreadId: thread-1} @ http://localhost:5173/src/hooks/useAgentSimulation.ts?t=1779314921691:6
+[   21674ms] [LOG] adding userBlock {id: b-1779315023576, threadId: thread-1, createdAt: 2026-05-20T22:10:23.576Z, type: user-prompt, content: Test message} @ http://localhost:5173/src/hooks/useAgentSimulation.ts?t=1779314921691:21

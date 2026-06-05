@@ -1,0 +1,293 @@
+{
+  "name": "BA/SA Assistant — Input Analyzer (Tools + Structured)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-exec",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an expert Business Analyst who excels at analyzing raw inputs and extracting structured requirements.\n\nYou have access to these tools:\n- fetch_jira_ticket: Fetch Jira ticket details when ticket keys are mentioned (e.g., PROJ-123, JIRA-456)\n- search_confluence: Search internal documentation for systems, APIs, architectures, and business rules\n- search_meetings: Search meeting notes and transcriptions for relevant discussions and decisions\n\nYour workflow:\n1. Analyze the user's request and identify what information you need\n2. Call fetch_jira_ticket if the user mentions Jira ticket keys\n3. Call search_confluence to find relevant documentation\n4. Call search_meetings to find relevant meeting discussions\n5. Synthesize ALL gathered information into a structured analysis\n6. Output valid JSON matching the exact schema below\n\nOutput valid JSON with this exact structure:\n{\n  \"analysis\": {\n    \"intent_summary\": \"What the user wants to achieve\",\n    \"domain\": \"business domain (e.g., payments, auth, inventory)\",\n    \"scope\": \"in_scope and out_of_scope items\",\n    \"stakeholders\": [\"list of implied stakeholders\"],\n    \"key_entities\": [\"entities mentioned (users, orders, products, etc.)\"],\n    \"key_processes\": [\"business processes involved\"]\n  },\n  \"requirements\": {\n    \"functional\": [\"FR-1: description\", \"FR-2: description\"],\n    \"non_functional\": [\"NFR-1: description\", \"NFR-2: description\"],\n    \"constraints\": [\"technical or business constraints\"],\n    \"assumptions\": [\"assumptions made during analysis\"]\n  },\n  \"inputs_summary\": {\n    \"jira_tickets\": [\"KEY-123: summary\"],\n    \"documents_referenced\": [\"doc sources found\"],\n    \"themes_identified\": [\"key themes from inputs\"]\n  },\n  \"recommendations\": {\n    \"suggested_doc_type\": \"requirements|system_design|api_spec\",\n    \"suggested_sections\": [\"sections that should be included\"],\n    \"gaps\": [\"information that is missing and needs clarification\"]\n  }\n}\n\nRules:\n- Be thorough and precise\n- Each requirement must be atomic and testable (given X, when Y, then Z)\n- If tools return no results, note this in inputs_summary and gaps\n- Output ONLY the JSON object, no markdown fences, no explanations before or after",
+          "maxIterations": 5
+        }
+      },
+      "id": "ai-input-analyzer",
+      "name": "AI Input Analyzer",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "={{ $env.LLM_MODEL }}",
+        "options": {
+          "baseURL": "={{ $env.LLM_BASE_URL }}"
+        }
+      },
+      "id": "llm",
+      "name": "LLM",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        440,
+        560
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-onprem",
+          "name": "OpenAI On-Premise"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"analysis\": {\n    \"intent_summary\": \"What the user wants to achieve\",\n    \"domain\": \"business domain (e.g., payments, auth, inventory)\",\n    \"scope\": \"in_scope and out_of_scope items\",\n    \"stakeholders\": [\n      \"list of implied stakeholders\"\n    ],\n    \"key_entities\": [\n      \"entities mentioned (users, orders, products, etc.)\"\n    ],\n    \"key_processes\": [\n      \"business processes involved\"\n    ]\n  },\n  \"requirements\": {\n    \"functional\": [\n      \"FR-1: description\",\n      \"FR-2: description\"\n    ],\n    \"non_functional\": [\n      \"NFR-1: description\",\n      \"NFR-2: description\"\n    ],\n    \"constraints\": [\n      \"technical or business constraints\"\n    ],\n    \"assumptions\": [\n      \"assumptions made during analysis\"\n    ]\n  },\n  \"inputs_summary\": {\n    \"jira_tickets\": [\n      \"KEY-123: summary\"\n    ],\n    \"documents_referenced\": [\n      \"doc sources found\"\n    ],\n    \"themes_identified\": [\n      \"key themes from inputs\"\n    ]\n  },\n  \"recommendations\": {\n    \"suggested_doc_type\": \"requirements|system_design|api_spec\",\n    \"suggested_sections\": [\n      \"sections that should be included\"\n    ],\n    \"gaps\": [\n      \"information that is missing and needs clarification\"\n    ]\n  }\n}"
+      },
+      "id": "structured-output",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "additionalFields": {}
+      },
+      "id": "jira-tool",
+      "name": "Jira Tool",
+      "type": "n8n-nodes-base.jiraTool",
+      "typeVersion": 1,
+      "position": [
+        220,
+        60
+      ],
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "jira-default",
+          "name": "Jira Default"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "options": {
+          "distanceStrategy": "cosine"
+        }
+      },
+      "id": "confluence-tool",
+      "name": "Search Confluence",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        220,
+        160
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-default",
+          "name": "Postgres Default"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "options": {
+          "distanceStrategy": "cosine"
+        }
+      },
+      "id": "meeting-tool",
+      "name": "Search Meetings",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        220,
+        260
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-default",
+          "name": "Postgres Default"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "embeddings-1",
+      "name": "Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        60,
+        160
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-onprem",
+          "name": "OpenAI On-Premise"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "embeddings-2",
+      "name": "Embeddings 2",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        60,
+        260
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-onprem",
+          "name": "OpenAI On-Premise"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate and normalize structured output from AI Agent\nconst input = $input.first().json;\nlet output = input.output || input.response || input.text || input.content || '';\n\n// Try to extract JSON from various formats\nlet parsed;\ntry {\n  // Try markdown code block first\n  const mdMatch = output.match(/```json\\n([\\s\\S]*?)\\n```/) || output.match(/```\\n([\\s\\S]*?)\\n```/);\n  if (mdMatch && mdMatch[1]) {\n    parsed = JSON.parse(mdMatch[1].trim());\n  } else {\n    // Try to find JSON object in the text\n    const jsonMatch = output.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      parsed = JSON.parse(jsonMatch[0]);\n    } else {\n      parsed = JSON.parse(output);\n    }\n  }\n} catch (e) {\n  return [{\n    json: {\n      valid: false,\n      error: 'Failed to parse structured output: ' + e.message,\n      raw_output: output.substring(0, 3000),\n      analysis: { intent_summary: 'Parse error', domain: 'unknown', scope: '', stakeholders: [], key_entities: [], key_processes: [] },\n      requirements: { functional: [], non_functional: [], constraints: [], assumptions: [] },\n      inputs_summary: { jira_tickets: [], documents_referenced: [], themes_identified: [] },\n      recommendations: { suggested_doc_type: 'requirements', suggested_sections: [], gaps: ['Failed to parse AI output - please review raw output'] }\n    }\n  }];\n}\n\n// Ensure all required sections exist with defaults\nconst defaults = {\n  analysis: { intent_summary: '', domain: '', scope: '', stakeholders: [], key_entities: [], key_processes: [] },\n  requirements: { functional: [], non_functional: [], constraints: [], assumptions: [] },\n  inputs_summary: { jira_tickets: [], documents_referenced: [], themes_identified: [] },\n  recommendations: { suggested_doc_type: 'requirements', suggested_sections: [], gaps: [] }\n};\n\nfor (const [key, value] of Object.entries(defaults)) {\n  if (!parsed[key] || typeof parsed[key] !== 'object') parsed[key] = value;\n  for (const [subKey, subValue] of Object.entries(value)) {\n    if (parsed[key][subKey] === undefined) parsed[key][subKey] = subValue;\n  }\n}\n\n// Validate critical fields\nconst errors = [];\nif (!parsed.analysis.intent_summary) errors.push('Missing analysis.intent_summary');\nif (!Array.isArray(parsed.requirements.functional)) errors.push('requirements.functional must be an array');\nif (!Array.isArray(parsed.requirements.non_functional)) errors.push('requirements.non_functional must be an array');\n\nif (errors.length > 0) {\n  return [{\n    json: {\n      valid: false,\n      error: 'Validation errors: ' + errors.join('; '),\n      raw_output: output.substring(0, 3000),\n      parsed: parsed\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    valid: true,\n    ...parsed\n  }\n}];"
+      },
+      "id": "validate-output",
+      "name": "Validate Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Input Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Input Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Validate Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Input Analyzer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Input Analyzer",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jira Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Input Analyzer",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Confluence": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Input Analyzer",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Meetings": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Input Analyzer",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Search Confluence",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings 2": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Search Meetings",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "ba-sa-assistant",
+    "input-analysis",
+    "tools",
+    "structured-output"
+  ]
+}

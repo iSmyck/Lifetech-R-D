@@ -1,0 +1,359 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "query"
+            },
+            {
+              "name": "sessionId"
+            }
+          ]
+        }
+      },
+      "id": "7e146fda-e23d-4a72-b04e-639e36bf3347",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -704,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract Jira Key (e.g., PROJ-123) from the AI query\nconst query = $input.first().json.query || '';\nconst match = query.match(/[A-Z][A-Z0-9]+-\\d+/);\n\nif (!match) {\n  return [{ json: { error: 'No valid Jira ticket key found in the query.', ticketKey: null } }];\n}\n\nreturn [{ json: { ticketKey: match[0], sessionId: $input.first().json.sessionId } }];"
+      },
+      "id": "4a2df3c6-4055-40dd-b31c-0f1dbc90b6df",
+      "name": "Extract Ticket Key",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "condition-key",
+              "leftValue": "={{ $json.ticketKey }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "30d04055-cf5c-4777-b8d3-cc194a1804b3",
+      "name": "Key Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://jira.lifetech.by/rest/api/2/issue/{{ $json.ticketKey }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "21a708c5-301e-4615-84c8-2616133359ab",
+      "name": "Get Issue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        16,
+        -48
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "p1DFZ9Q5hjUgW5GV",
+          "name": "Wiki Creds"
+        },
+        "httpBearerAuth": {
+          "id": "1tUUiWJNM5CMtfb7",
+          "name": "Jira Bearer Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://jira.lifetech.by/rest/api/2/issue/{{ $('Extract Ticket Key').item.json.ticketKey }}/comment",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "9c8e15b4-978c-49be-bb58-dc6864607b61",
+      "name": "Get Comments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        256
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "p1DFZ9Q5hjUgW5GV",
+          "name": "Wiki Creds"
+        },
+        "httpBearerAuth": {
+          "id": "1tUUiWJNM5CMtfb7",
+          "name": "Jira Bearer Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "key",
+              "name": "issue.key",
+              "value": "={{ $json.key }}",
+              "type": "string"
+            },
+            {
+              "id": "summary",
+              "name": "issue.summary",
+              "value": "={{ $json.fields.summary }}",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "issue.status",
+              "value": "={{ $json.fields.status.name }}",
+              "type": "string"
+            },
+            {
+              "id": "priority",
+              "name": "issue.priority",
+              "value": "={{ $json.fields.priority?.name || 'None' }}",
+              "type": "string"
+            },
+            {
+              "id": "assignee",
+              "name": "issue.assignee",
+              "value": "={{ $json.fields.assignee?.displayName || 'Unassigned' }}",
+              "type": "string"
+            },
+            {
+              "id": "description",
+              "name": "issue.description",
+              "value": "={{ $json.fields.description || 'No description' }}",
+              "type": "string"
+            },
+            {
+              "id": "links",
+              "name": "issue.linked_issues",
+              "value": "={{ $json.fields.issuelinks.map(link => { if (link.outwardIssue) return `${link.outwardIssue.key}: ${link.outwardIssue.fields.summary}`; if (link.inwardIssue) return `${link.inwardIssue.key}: ${link.inwardIssue.fields.summary}`; return ''; }).filter(Boolean).join('\\n') || 'None' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e7cd87e7-cab4-4a02-903c-b4f4be4660bb",
+      "name": "Extract Issue Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "comments_md",
+              "name": "issue.comments_md",
+              "value": "={{ $json.comments.map(c => `**${c.author.displayName}** at ${new Date(c.created).toLocaleString()}:\\n${c.body}`).join('\\n\\n---\\n\\n') || 'No comments' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "50cacb6c-4e6e-42bb-ad1a-760786cc644e",
+      "name": "Extract Comments Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "jira_context",
+              "name": "jira_context",
+              "value": "=# Jira Ticket: {{ $json.issue.key }} - {{ $json.issue.summary }}\n**Status:** {{ $json.issue.status }} | **Priority:** {{ $json.issue.priority }} | **Assignee:** {{ $json.issue.assignee }}\n\n## Description\n{{ $json.issue.description }}\n\n## Linked Issues\n{{ $json.issue.linked_issues }}\n\n## Comments\n{{ $json.issue.comments_md }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6de04fef-87cf-410e-92b5-e3e569e031de",
+      "name": "Build Markdown Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        592,
+        80
+      ],
+      "id": "ff9c2a49-fb71-4f71-85d3-8b3274dfad8b",
+      "name": "Merge1"
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Ticket Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Ticket Key": {
+      "main": [
+        [
+          {
+            "node": "Key Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Key Found?": {
+      "main": [
+        [
+          {
+            "node": "Get Issue",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Comments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Issue": {
+      "main": [
+        [
+          {
+            "node": "Extract Issue Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Comments": {
+      "main": [
+        [
+          {
+            "node": "Extract Comments Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Issue Data": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Comments Data": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Build Markdown Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "Execute Workflow Trigger": [
+      {
+        "query": "AITP-29",
+        "sessionId": "c57363db54f24fd6867fc8849c8891c1"
+      }
+    ]
+  },
+  "meta": {
+    "instanceId": "dbcdf4240176c5813914527d67a16d32167efe192158d1699f75be3eff32c81b"
+  }
+}

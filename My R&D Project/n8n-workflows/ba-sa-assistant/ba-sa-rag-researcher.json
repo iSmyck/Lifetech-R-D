@@ -1,0 +1,199 @@
+{
+  "name": "BA/SA Assistant — RAG Researcher (Tools + Structured)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-exec",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a technical research assistant specializing in systems architecture, API design, and business analysis.\n\nYou have access to:\n- search_knowledge_base: Search the internal knowledge base (pgvector) for documentation about APIs, architecture patterns, business rules, data models, and technical decisions\n\nYour task:\n1. Read the requirements provided in the input\n2. Formulate search queries and call search_knowledge_base to find relevant documentation\n3. Synthesize a comprehensive research brief from all retrieved documents\n4. Identify gaps where documentation is missing\n5. Output structured JSON\n\nOutput valid JSON with this exact structure:\n{\n  \"research_brief\": {\n    \"topic\": \"main topic of research\",\n    \"key_apis\": [\n      {\"name\": \"API name\", \"endpoint\": \"path\", \"description\": \"what it does\", \"source\": \"doc source\"}\n    ],\n    \"architecture_patterns\": [\"patterns found with sources\"],\n    \"business_rules\": [\"rules that apply with sources\"],\n    \"data_models\": [\"entities and relationships with sources\"],\n    \"security_considerations\": [\"security requirements\"],\n    \"performance_requirements\": [\"performance needs\"],\n    \"integration_points\": [\"external systems to integrate with\"]\n  },\n  \"gaps\": [\"areas where documentation is missing or unclear\"],\n  \"confidence\": \"high|medium|low\",\n  \"sources_consulted\": [\"list of document sources used\"]\n}\n\nRules:\n- Cite sources for every claim (e.g., \"from payment-api-v2.md\")\n- If search returns nothing, state this clearly in gaps and set confidence to low\n- Each API entry must have name, endpoint, and description\n- Output ONLY the JSON object, no markdown fences, no explanations",
+          "maxIterations": 5
+        }
+      },
+      "id": "rag-researcher",
+      "name": "RAG Researcher",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "={{ $env.LLM_MODEL }}",
+        "options": {
+          "baseURL": "={{ $env.LLM_BASE_URL }}"
+        }
+      },
+      "id": "llm",
+      "name": "LLM",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        440,
+        520
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-onprem",
+          "name": "OpenAI On-Premise"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"research_brief\": {\n    \"topic\": \"main topic of research\",\n    \"key_apis\": [\n      {\n        \"name\": \"API name\",\n        \"endpoint\": \"path\",\n        \"description\": \"what it does\",\n        \"source\": \"doc source\"\n      }\n    ],\n    \"architecture_patterns\": [\n      \"patterns found with sources\"\n    ],\n    \"business_rules\": [\n      \"rules that apply with sources\"\n    ],\n    \"data_models\": [\n      \"entities and relationships with sources\"\n    ],\n    \"security_considerations\": [\n      \"security requirements\"\n    ],\n    \"performance_requirements\": [\n      \"performance needs\"\n    ],\n    \"integration_points\": [\n      \"external systems to integrate with\"\n    ]\n  },\n  \"gaps\": [\n    \"areas where documentation is missing or unclear\"\n  ],\n  \"confidence\": \"high|medium|low\",\n  \"sources_consulted\": [\n    \"list of document sources used\"\n  ]\n}"
+      },
+      "id": "structured-output",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "options": {
+          "distanceStrategy": "cosine"
+        }
+      },
+      "id": "rag-tool",
+      "name": "Search Knowledge Base",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [
+        220,
+        120
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-default",
+          "name": "Postgres Default"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "embeddings",
+      "name": "Embeddings",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        60,
+        120
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-onprem",
+          "name": "OpenAI On-Premise"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate RAG Researcher structured output\nconst input = $input.first().json;\nlet output = input.output || input.response || input.text || input.content || '';\n\nlet parsed;\ntry {\n  const mdMatch = output.match(/```json\\n([\\s\\S]*?)\\n```/) || output.match(/```\\n([\\s\\S]*?)\\n```/);\n  if (mdMatch && mdMatch[1]) {\n    parsed = JSON.parse(mdMatch[1].trim());\n  } else {\n    const jsonMatch = output.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);\n    else parsed = JSON.parse(output);\n  }\n} catch (e) {\n  return [{\n    json: {\n      valid: false,\n      error: 'Parse error: ' + e.message,\n      raw_output: output.substring(0, 3000),\n      research_brief: { topic: '', key_apis: [], architecture_patterns: [], business_rules: [], data_models: [], security_considerations: [], performance_requirements: [], integration_points: [] },\n      gaps: ['Failed to parse research output'],\n      confidence: 'low',\n      sources_consulted: []\n    }\n  }];\n}\n\nif (!parsed.research_brief) parsed.research_brief = { topic: '', key_apis: [], architecture_patterns: [], business_rules: [], data_models: [], security_considerations: [], performance_requirements: [], integration_points: [] };\nif (!parsed.gaps) parsed.gaps = [];\nif (!parsed.confidence) parsed.confidence = 'low';\nif (!parsed.sources_consulted) parsed.sources_consulted = [];\n\n// Validate arrays\nconst arrFields = ['key_apis', 'architecture_patterns', 'business_rules', 'data_models', 'security_considerations', 'performance_requirements', 'integration_points'];\nfor (const f of arrFields) {\n  if (!Array.isArray(parsed.research_brief[f])) parsed.research_brief[f] = [];\n}\n\nreturn [{ json: { valid: true, ...parsed } }];"
+      },
+      "id": "validate-output",
+      "name": "Validate Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "RAG Researcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG Researcher": {
+      "main": [
+        [
+          {
+            "node": "Validate Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RAG Researcher",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "RAG Researcher",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Knowledge Base": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Researcher",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Search Knowledge Base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "ba-sa-assistant",
+    "rag-research",
+    "tools",
+    "structured-output"
+  ]
+}

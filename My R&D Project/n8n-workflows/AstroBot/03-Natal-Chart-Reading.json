@@ -1,0 +1,424 @@
+{
+  "name": "AstroBot 03 - Natal Chart Reading",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "id": "trigger-natal-03",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, telegram_id, full_name, chart_context_xml, chart_data_json FROM users WHERE telegram_id = $1 LIMIT 1;",
+        "options": {
+          "queryParams": {
+            "parameters": [
+              { "name": "telegram_id", "value": "={{ $json.telegram_id }}" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [420, 300],
+      "id": "postgres-get-chart-03",
+      "name": "Get Chart from DB",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst user = item.body?.[0];\n\nif (!user || !user.chart_context_xml) {\n  return [{ json: { ...item, chart_exists: false } }];\n}\n\nreturn [{\n  json: {\n    ...item,\n    chart_exists: true,\n    user_id: user.id,\n    full_name: user.full_name,\n    chart_context_xml: user.chart_context_xml,\n    chart_data_json: user.chart_data_json\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 300],
+      "id": "check-chart-03",
+      "name": "Check Chart Exists"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "chart-exists",
+              "leftValue": "={{ $json.chart_exists }}",
+              "rightValue": true,
+              "operator": {
+                "name": "boolean.equals",
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [860, 300],
+      "id": "if-chart-exists-03",
+      "name": "Chart Exists?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst chartContext = item.chart_context_xml || '';\nconst fullName = item.full_name || 'Пользователь';\n\nconst prompt = `Имя клиента: ${fullName}\n\n## Натальная карта (XML контекст):\n${chartContext}\n\nПроанализируй натальную карту. Опиши основные черты личности (Солнце, Луна, Асцендент), сферы жизни (дома с планетами), ключевые аспекты и их влияние, баланс стихий и качеств, а также дай конкретные рекомендации по саморазвитию.\n\nЕсли нужно, используй инструмент поиска по астрологической базе знаний для уточнения интерпретаций конкретных планетарных положений.`;\n\nreturn [{\n  json: {\n    ...item,\n    prompt_text: prompt\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 220],
+      "id": "format-prompt-03",
+      "name": "Format Prompt"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt_text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Ты — профессиональный астролог с 20-летним стажем. Твоя задача — составить глубокий, персонализированный анализ натальной карты на русском языке.\n\nПравила работы:\n1. Опирайся ТОЛЬКО на предоставленные астрологические данные (планетарные позиции, дома, аспекты из XML контекста карты).\n2. Используй инструмент поиска по астрологической базе знаний для уточнения интерпретаций конкретных планетарных положений.\n3. Структура ответа:\n   - Основные черты личности (Солнце, Луна, Асцендент)\n   - Сферы жизни (дома с планетами)\n   - Ключевые аспекты и их влияние\n   - Баланс стихий и качеств\n   - Конкретные рекомендации по саморазвитию\n4. Максимальная длина: 3500 символов.\n5. Будь конкретным, избегай общих фраз. Ссылайся на конкретные планеты, знаки и дома.\n6. НЕ выдумывай планетарные позиции, которых нет в данных карты.",
+          "maxIterations": 3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [1300, 220],
+      "id": "ai-agent-natal-03",
+      "name": "AI Agent Natal"
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [1180, 40],
+      "id": "openai-natal-03",
+      "name": "OpenAI GPT-4o",
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_API_KEY",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionKey": "={{ 'astrobot:natal:' + $json.telegram_id }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [1300, 40],
+      "id": "memory-natal-03",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "options": {
+          "tableName": "rag_embeddings",
+          "metadataFilter": ""
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [1420, 40],
+      "id": "pgvector-natal-03",
+      "name": "PGVector RAG",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-3-small",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [1540, 160],
+      "id": "embeddings-natal-03",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_API_KEY",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"response\": {\n      \"type\": \"string\",\n      \"description\": \"Полный астрологический анализ на русском языке\"\n    }\n  },\n  \"required\": [\"response\"]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [1660, 40],
+      "id": "output-parser-natal-03",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst parsed = item.output || item;\nlet text = '';\nif (typeof parsed === 'object' && parsed !== null) {\n  text = parsed.response || parsed.text || JSON.stringify(parsed);\n} else {\n  text = String(parsed);\n}\nreturn [{\n  json: {\n    ...item,\n    response_text: text\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 220],
+      "id": "format-response-03",
+      "name": "Format Response"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "={{ $json.response_text }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1740, 220],
+      "id": "telegram-natal-result-03",
+      "name": "Send Natal Analysis",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "Что дальше?",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "keyboard": [
+            [
+              {
+                "text": "🔮 Задать вопрос",
+                "callback_data": "ask_question"
+              },
+              {
+                "text": "🔙 Главное меню",
+                "callback_data": "main_menu"
+              }
+            ]
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1960, 220],
+      "id": "telegram-next-actions-03",
+      "name": "Send Next Actions",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "Сначала нужно пройти регистрацию. Используйте /start",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1080, 380],
+      "id": "telegram-no-chart-03",
+      "name": "No Chart Message",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Chart from DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Chart from DB": {
+      "main": [
+        [
+          {
+            "node": "Check Chart Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Chart Exists": {
+      "main": [
+        [
+          {
+            "node": "Chart Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chart Exists?": {
+      "main": [
+        [
+          {
+            "node": "Format Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Chart Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Prompt": {
+      "main": [
+        [
+          {
+            "node": "AI Agent Natal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent Natal": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Send Natal Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Natal Analysis": {
+      "main": [
+        [
+          {
+            "node": "Send Next Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI GPT-4o": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent Natal",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent Natal",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PGVector RAG": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent Natal",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "PGVector RAG",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent Natal",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "AstroBot 07 - Error Handler"
+  },
+  "staticData": null,
+  "tags": ["astrobot", "natal-chart", "rag", "ai-agent"]
+}

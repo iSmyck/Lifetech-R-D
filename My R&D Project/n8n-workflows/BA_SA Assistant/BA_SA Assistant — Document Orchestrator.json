@@ -1,0 +1,642 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "query"
+            },
+            {
+              "name": "sessionId"
+            }
+          ]
+        }
+      },
+      "id": "2c565806-405b-43ae-a224-668ad5e3572a",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        32,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.query }}",
+        "options": {
+          "systemMessage": "=You are a Data Gathering Agent. Your job is to collect all necessary context for document creation.\n\nWorkflow:\n1. Analyze the user request. Determine the document type (BRD, SRS, SDD, PRD, Architecture).\n2. If Jira tickets are mentioned, call fetch_jira_data tool ONCE.\n3. Call analyze_with_knowledge tool ONCE to find related APIs and architecture. If it returns no data, just proceed with empty context.\n4. After gathering data (or if no tools are needed), YOU MUST STOP CALLING TOOLS and output a STRICT JSON object.\n\nCRITICAL RULES:\n- Call each tool MAXIMUM ONE TIME. Do not repeat tool calls.\n- If a tool returns no data or an error, do NOT try again. Just use empty strings for the context.\n- Your final output must be ONLY valid JSON, no markdown fences (no ```json), no extra text.\n\nOutput format:\n{\n  \"document_type\": \"SDD\",\n  \"user_goal\": \"What the user wants to achieve\",\n  \"jira_context\": \"Summary of Jira data or empty string\",\n  \"kb_context\": \"Summary of Knowledge Base data or empty string\",\n  \"needs_clarification\": false,\n  \"clarification_question\": \"\"\n}\n\nIf the request is totally unclear, set needs_clarification to true and ask a question. Otherwise, gather data and return needs_clarification as false.",
+          "maxIterations": 2
+        }
+      },
+      "id": "cb0bc301-ec45-4769-bd20-bb3881c04626",
+      "name": "1. Researcher Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        272,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "Qwen3.6:27b",
+          "mode": "list"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "133c38a2-2588-4d36-aa63-7e6bb3e4316f",
+      "name": "LLM Researcher",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        1648
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "6bTEyGq8S10ETYSX",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nlet output = input.output || input.response || input.text || input.content || '';\n\ntry {\n  const jsonMatch = output.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    const parsed = JSON.parse(jsonMatch[0]);\n    if (parsed.needs_clarification) {\n      return [{ json: { action: 'clarify', question: parsed.clarification_question } }];\n    }\n    return [{ json: { action: 'proceed', research: parsed } }];\n  }\n} catch (e) {}\n\nreturn [{ json: { action: 'clarify', question: 'Failed to understand the request. Could you provide more details?' } }];"
+      },
+      "id": "70fa374d-c881-4cdd-86d6-f66a563f0053",
+      "name": "Parse Research Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// MOCK: In reality, here you query Postgres:\n// const docType = $json.research.document_type;\n// const template = await $('Postgres').runQuery('SELECT structure FROM document_templates WHERE name = $1', [docType]);\n\nconst docType = $json.research.document_type || 'SDD';\n\nconst templates = {\n  'SDD': '# System Design Document\\n## 1. Overview\\n## 2. Architecture\\n## 3. API Design\\n## 4. Data Model',\n  'BRD': '# Business Requirements\\n## 1. Objectives\\n## 2. Scope\\n## 3. Stakeholders'\n};\n\nreturn [{ json: { template: templates[docType] || templates['SDD'] } }];"
+      },
+      "id": "96a34171-5f23-4e58-b467-e55bae0aff4f",
+      "name": "2. Fetch Template (Code/DB)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=USER GOAL:\n{{ $('Parse Research Data').item.json.research.user_goal }}\n\nJIRA CONTEXT:\n{{ $('Parse Research Data').item.json.research.jira_context }}\n\nKNOWLEDGE BASE CONTEXT:\n{{ $('Parse Research Data').item.json.research.kb_context }}\n\n---\nTEMPLATE TO FOLLOW:\n{{ $json.template }}\n\n---\nTASK: Fill in the template using the provided context. If a section lacks data, write '[Data Missing]'. When complete, call submit_for_review.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a Technical Writer Agent. You receive pre-gathered data and a strict template. Your job is to write the document.\n\nRULES:\n- STRICTLY follow the template structure provided in the prompt.\n- Use the provided Jira and Knowledge Base context to fill in the details.\n- Do NOT search for data. All data is provided to you.\n- If you need to create a diagram, use the generate_diagram tool.\n\nCRITICAL DIAGRAM FORMATTING RULE:\nWhen you need a diagram, call the generate_diagram tool. The tool will return a JSON object containing the 'type' (e.g., 'mermaid') and the raw 'diagram_code'. \nYou MUST embed the diagram code into the final Markdown document using EXACTLY this format:\n\n``` {diagram_type}\n{diagram_code}\n```\n\nExample of a correctly formatted Mermaid diagram block:\n\n```mermaid\ngraph TD\n    A[Start] --> B[End]\n```\n\nDo NOT modify the diagram code returned by the tool. Do NOT add extra spaces inside the code block. Ensure there is a space between the backticks and the diagram type.\n\n- When the document is fully written in Markdown return JSON in following format:\n\n{\n  \"title\": \"some_text\",\n  \"content\": \"some_markdown\"\n}"
+        }
+      },
+      "id": "7d3539f6-7286-4d0b-bfa7-450110bcd5ad",
+      "name": "3. Writer Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        1120,
+        1440
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "Qwen3.6:27b",
+          "mode": "list"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "3e716257-1573-4227-b412-1a527f0a7e6f",
+      "name": "LLM Writer",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1040,
+        1632
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "6bTEyGq8S10ETYSX",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Fetch Jira tickets...",
+        "workflowId": {
+          "__rl": true,
+          "value": "8WZrs1QLVZtaFwRb",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/8WZrs1QLVZtaFwRb",
+          "cachedResultName": "fetch_jira_data"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "query": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('query', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "sessionId",
+              "displayName": "sessionId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "996c9ca9-c823-4615-a976-96bbb0a8e858",
+      "name": "fetch_jira_data3",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        352,
+        1712
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Query knowledge base...",
+        "workflowId": {
+          "__rl": true,
+          "value": "om8h0hUo7XXcOnWk",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/om8h0hUo7XXcOnWk",
+          "cachedResultName": "BA/SA Assistant — RAG Researcher (Tools + Structured)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "query": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('query', ``, 'string') }}",
+            "sessionId": "={{ $json.sessionId }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "sessionId",
+              "displayName": "sessionId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "706c16b1-8f90-4719-9b0d-c0adbb01f41d",
+      "name": "analyze_with_knowledge2",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        1808
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Generate diagrams...",
+        "workflowId": {
+          "__rl": true,
+          "value": "SY1mpnNt1PVdRQaz",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/SY1mpnNt1PVdRQaz",
+          "cachedResultName": "BA/SA Assistant — Diagram Generator"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "c64995f1-22ed-4e66-9ceb-e19b11923dbc",
+      "name": "generate_diagram2",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1232,
+        1696
+      ]
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "value": "BA Agent",
+          "mode": "list",
+          "cachedResultName": "BA Agent"
+        },
+        "table": {
+          "__rl": true,
+          "value": "document_drafts",
+          "mode": "list",
+          "cachedResultName": "document_drafts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "=const id = crypto.randomUUID();",
+            "session_id": "={{ $('Execute Workflow Trigger').item.json.sessionId }}",
+            "content": "={{ $('3. Writer Agent').item.json.output.content }}",
+            "status": "pending_review",
+            "created_at": "={{ $now.toFormat('yyyy-MM-dd HH:mm:ss') }}",
+            "updated_at": "=",
+            "title": "={{ $('3. Writer Agent').item.json.output.title }}",
+            "template_type": "={{ $('2. Fetch Template (Code/DB)').item.json.template }}",
+            "sources": "={{ $('Parse Research Data').item.json.research.jira_context }}\n{{ $('Parse Research Data').item.json.research.kb_context }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "session_id",
+              "displayName": "session_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "template_type",
+              "displayName": "template_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "content",
+              "displayName": "content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "diagrams",
+              "displayName": "diagrams",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sources",
+              "displayName": "sources",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reviewer_notes",
+              "displayName": "reviewer_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1648,
+        1440
+      ],
+      "id": "b63b88b7-06c9-4b5c-ac45-b2dd4c758da5",
+      "name": "Insert rows in a table",
+      "credentials": {
+        "postgres": {
+          "id": "x8X38DlslzAtpIlO",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1824,
+        1440
+      ],
+      "id": "2e0b1d5b-4fae-4f2f-9bb5-0a48808d9047",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"title\": \"some_text\",\n  \"content\": \"some_markdown\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1392,
+        1664
+      ],
+      "id": "9c76cbee-e6f3-42e7-85ff-14c0196434cc",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f3240e5e-dc21-49e4-8862-d2a1a70e4616",
+              "name": "output.content",
+              "value": "={{ $json.output.content }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1456,
+        1440
+      ],
+      "id": "2e008105-9be5-41f6-bc70-e78c924894c4",
+      "name": "Edit Fields1"
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "1. Researcher Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Researcher Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Research Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Researcher": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "1. Researcher Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Research Data": {
+      "main": [
+        [
+          {
+            "node": "2. Fetch Template (Code/DB)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Fetch Template (Code/DB)": {
+      "main": [
+        [
+          {
+            "node": "3. Writer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Writer Agent": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Writer": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "3. Writer Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "fetch_jira_data3": {
+      "ai_tool": [
+        [
+          {
+            "node": "1. Researcher Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "analyze_with_knowledge2": {
+      "ai_tool": [
+        [
+          {
+            "node": "1. Researcher Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "generate_diagram2": {
+      "ai_tool": [
+        [
+          {
+            "node": "3. Writer Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert rows in a table": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "3. Writer Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "Execute Workflow Trigger": [
+      {
+        "query": "напиши мне дизайн по разбиению данных на чанки перевод их в вектор. Тикет https://jira.lifetech.by/browse/AITP-29",
+        "sessionId": "c57363db54f24fd6867fc8849c8891c1"
+      }
+    ],
+    "1. Researcher Agent": [
+      {
+        "output": "{\n  \"document_type\": \"SDD\",\n  \"user_goal\": \"Create a design document for splitting data into chunks and converting them to vectors, based on Jira ticket AITP-29\",\n  \"jira_context\": \"Ticket AITP-29: Chunking and loading final Markdown into Vector DB. Status: To Do, Priority: Medium, Assignee: Anton Smychkin. Description: Split the final Markdown (containing text, S3 links, and Mermaid blocks) into chunks and save them to the vector database for RAG. Acceptance Criteria: 1) Text is split into chunks with overlap. 2) Mermaid code blocks are not split across chunks (code integrity is preserved). 3) Chunk metadata contains source_url, space_key, last_updated.\",\n  \"kb_context\": \"\",\n  \"needs_clarification\": false,\n  \"clarification_question\": \"\"\n}"
+      }
+    ],
+    "3. Writer Agent": [
+      {
+        "output": {
+          "title": "System Design Document: Chunking and Vector Database Loading",
+          "content": "# System Design Document\n## 1. Overview\n\nThis document describes the design for splitting final Markdown content into chunks and loading them into a Vector Database for Retrieval-Augmented Generation (RAG) purposes.\n\n**Ticket Reference:** AITP-29  \n**Status:** To Do  \n**Priority:** Medium  \n**Assignee:** Anton Smychkin\n\n**Purpose:** The system processes final Markdown documents containing text, S3 links, and Mermaid code blocks, splits them into appropriately sized chunks while preserving code integrity, and stores them in a vector database with relevant metadata for efficient retrieval during RAG operations.\n\n**Key Requirements:**\n- Text is split into chunks with overlap to maintain context\n- Mermaid code blocks are preserved intact (not split across chunks)\n- Each chunk includes metadata: source_url, space_key, last_updated\n\n## 2. Architecture\n\n[Data Missing - Diagram generation unavailable]\n\n**High-Level Flow:**\n1. **Input:** Final Markdown document containing text, S3 links, and Mermaid blocks\n2. **Processing:** Markdown is parsed and split into chunks using a chunking engine that:\n   - Splits text with configurable overlap\n   - Preserves Mermaid code blocks as atomic units\n   - Attaches metadata to each chunk\n3. **Output:** Chunks are converted to vector embeddings and stored in the Vector Database\n\n**Components:**\n- **Markdown Parser:** Parses the input Markdown to identify text blocks, S3 links, and Mermaid code blocks\n- **Chunking Engine:** Splits content into chunks while respecting Mermaid block boundaries\n- **Metadata Manager:** Attaches source_url, space_key, and last_updated to each chunk\n- **Vector Embedding Service:** Converts text chunks to vector embeddings\n- **Vector Database:** Stores embeddings and metadata for retrieval\n\n## 3. API Design\n\n[Data Missing]\n\n**Expected API Endpoints (Proposed):**\n\n**POST /api/chunks/ingest**\n- **Purpose:** Ingest Markdown content and create chunks in Vector DB\n- **Request Body:**\n  ```json\n  {\n    \"markdown_content\": \"string\",\n    \"source_url\": \"string\",\n    \"space_key\": \"string\",\n    \"last_updated\": \"ISO8601_timestamp\"\n  }\n  ```\n- **Response:**\n  ```json\n  {\n    \"chunk_count\": \"integer\",\n    \"chunk_ids\": [\"string\"],\n    \"status\": \"success\"\n  }\n  ```\n\n**GET /api/chunks/search**\n- **Purpose:** Search for relevant chunks using vector similarity\n- **Request Body:**\n  ```json\n  {\n    \"query\": \"string\",\n    \"top_k\": \"integer\"\n  }\n  ```\n- **Response:**\n  ```json\n  {\n    \"results\": [\n      {\n        \"chunk_id\": \"string\",\n        \"content\": \"string\",\n        \"metadata\": {\n          \"source_url\": \"string\",\n          \"space_key\": \"string\",\n          \"last_updated\": \"string\"\n        },\n        \"similarity_score\": \"float\"\n      }\n    ]\n  }\n  ```\n\n## 4. Data Model\n\n**Chunk Entity:**\n\n| Field | Type | Description |\n|-------|------|-------------|\n| chunk_id | UUID | Unique identifier for the chunk |\n| content | String | The text content of the chunk |\n| embedding | Vector | Vector embedding of the chunk content |\n| source_url | String | URL of the source document |\n| space_key | String | Space identifier (e.g., Confluence space key) |\n| last_updated | Timestamp | Last update timestamp of the source document |\n| chunk_index | Integer | Position of the chunk within the original document |\n| is_mermaid_block | Boolean | Flag indicating if chunk contains a Mermaid code block |\n| overlap_with_previous | Integer | Number of characters overlapping with previous chunk |\n| overlap_with_next | Integer | Number of characters overlapping with next chunk |\n\n**Metadata Schema:**\n\n```json\n{\n  \"source_url\": \"string\",\n  \"space_key\": \"string\",\n  \"last_updated\": \"ISO8601_timestamp\"\n}\n```\n\n**Chunking Strategy:**\n- **Text Chunks:** Split by character count with configurable overlap (e.g., 1000 characters with 200 character overlap)\n- **Mermaid Blocks:** Treated as atomic units - never split across chunks\n- **S3 Links:** Preserved as-is within chunks\n\n**Vector Database Schema:**\n- Stores vector embeddings for semantic search\n- Indexes metadata fields for filtering\n- Supports similarity search queries"
+        }
+      }
+    ]
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "dbcdf4240176c5813914527d67a16d32167efe192158d1699f75be3eff32c81b"
+  }
+}

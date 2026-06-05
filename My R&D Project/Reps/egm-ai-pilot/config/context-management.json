@@ -1,0 +1,23 @@
+{
+  "context_window_budget": {
+    "system_prompt": 2000,
+    "skills": 1500,
+    "user_input": 1000,
+    "rag_context": 0,
+    "conversation_history": 500,
+    "output_reservation": 2000
+  },
+  "context_priority": [
+    "system_prompt",
+    "user_input",
+    "skills",
+    "conversation_history",
+    "rag_context"
+  ],
+  "truncation_strategy": "tail_drop_with_summary",
+  "session_memory": {
+    "enabled": true,
+    "max_turns": 5,
+    "compression": "summarize_after_3_turns"
+  }
+}

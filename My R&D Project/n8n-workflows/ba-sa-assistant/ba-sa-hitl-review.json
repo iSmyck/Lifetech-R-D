@@ -1,0 +1,237 @@
+{
+  "name": "BA/SA Assistant — HITL Review (Structured)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-exec",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM document_drafts WHERE id = $1;",
+        "options": {}
+      },
+      "id": "load-draft",
+      "name": "Load Draft",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        120
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-default",
+          "name": "Postgres Default"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a document editor assistant. You apply user-specified edits to technical documents while preserving structure and formatting.\n\nYour task:\n1. Read the current document content\n2. Read the user's edit instructions\n3. Apply the changes precisely\n4. Output the updated document in structured format\n\nOutput valid JSON:\n{\n  \"action\": \"edit|approve|reject\",\n  \"updated_content\": \"full updated markdown document\",\n  \"changes_made\": [\"list of specific changes applied\"],\n  \"sections_modified\": [\"names of sections that were changed\"],\n  \"notes\": \"any notes or warnings about the edits\"\n}\n\nRules:\n- Preserve Markdown structure (headers, tables, lists)\n- Do not change content that was not requested to be modified\n- If the edit instruction is unclear, note this in notes\n- Output ONLY the JSON object",
+          "maxIterations": 3
+        }
+      },
+      "id": "hitl-agent",
+      "name": "HITL Editor",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "={{ $env.LLM_MODEL }}",
+        "options": {
+          "baseURL": "={{ $env.LLM_BASE_URL }}"
+        }
+      },
+      "id": "llm",
+      "name": "LLM",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        440,
+        520
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-onprem",
+          "name": "OpenAI On-Premise"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"action\": \"edit|approve|reject\",\n  \"updated_content\": \"full updated markdown document\",\n  \"changes_made\": [\n    \"list of specific changes applied\"\n  ],\n  \"sections_modified\": [\n    \"names of sections that were changed\"\n  ],\n  \"notes\": \"any notes or warnings about the edits\"\n}"
+      },
+      "id": "structured-output",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate HITL output\nconst input = $input.first().json;\nlet output = input.output || input.response || input.text || input.content || '';\n\nlet parsed;\ntry {\n  const mdMatch = output.match(/```json\\n([\\s\\S]*?)\\n```/) || output.match(/```\\n([\\s\\S]*?)\\n```/);\n  if (mdMatch && mdMatch[1]) parsed = JSON.parse(mdMatch[1].trim());\n  else {\n    const jsonMatch = output.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);\n    else parsed = JSON.parse(output);\n  }\n} catch (e) {\n  return [{\n    json: {\n      valid: false,\n      error: 'Parse error: ' + e.message,\n      raw_output: output.substring(0, 3000),\n      action: 'edit',\n      updated_content: input.current_content || '',\n      changes_made: [],\n      sections_modified: [],\n      notes: 'Failed to parse edit output'\n    }\n  }];\n}\n\nif (!parsed.action) parsed.action = 'edit';\nif (!parsed.updated_content) parsed.updated_content = input.current_content || '';\nif (!Array.isArray(parsed.changes_made)) parsed.changes_made = [];\nif (!Array.isArray(parsed.sections_modified)) parsed.sections_modified = [];\nif (!parsed.notes) parsed.notes = '';\n\nreturn [{ json: { valid: true, ...parsed } }];"
+      },
+      "id": "validate-output",
+      "name": "Validate Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WIKI_JS_URL }}/graphql",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "body": {
+          "contentType": "json",
+          "json": "{\"query\": \"mutation { pages { create(input: { path: \\\"{{ $json.path }}\\\", title: \\\"{{ $json.title }}\\\", content: \\\"{{ $json.content }}\\\" }) { page { id path } } } }\"}"
+        },
+        "options": {}
+      },
+      "id": "publish-wiki",
+      "name": "Publish to Wiki.js",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1100,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wiki-js-api",
+          "name": "Wiki.js API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE document_drafts SET status = $2, content = $3, updated_at = NOW() WHERE id = $1 RETURNING *;",
+        "options": {}
+      },
+      "id": "update-draft",
+      "name": "Update Draft",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1100,
+        460
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-default",
+          "name": "Postgres Default"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Draft",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HITL Editor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Draft": {
+      "main": [
+        [
+          {
+            "node": "HITL Editor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HITL Editor": {
+      "main": [
+        [
+          {
+            "node": "Validate Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "HITL Editor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "HITL Editor",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Output": {
+      "main": [
+        [
+          {
+            "node": "Publish to Wiki.js",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "ba-sa-assistant",
+    "hitl",
+    "structured-output"
+  ]
+}

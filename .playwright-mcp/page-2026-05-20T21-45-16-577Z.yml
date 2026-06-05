@@ -1,0 +1,237 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - button "Summer Product Launch" [ref=e7]:
+      - generic [ref=e8]: Summer Product Launch
+      - img [ref=e9]
+    - generic [ref=e11]:
+      - button "Threads" [ref=e12]:
+        - img [ref=e13]
+        - generic [ref=e15]: Threads
+      - button "Files" [ref=e16]:
+        - img [ref=e17]
+        - generic [ref=e19]: Files
+      - button "Knowledge" [ref=e20]:
+        - img [ref=e21]
+        - generic [ref=e23]: Knowledge
+    - generic [ref=e168]:
+      - generic [ref=e169]:
+        - generic [ref=e170]: Today
+        - 'button "Email Campaign: Early Access Generated a 3-email sequence for the early access program... 8m ago" [ref=e261]':
+          - generic [ref=e173]: "Email Campaign: Early Access"
+          - generic [ref=e174]: Generated a 3-email sequence for the early access program...
+          - generic [ref=e175]: 8m ago
+      - generic [ref=e176]:
+        - generic [ref=e177]: Yesterday
+        - generic [ref=e178]:
+          - button "Social Media Content Pack Generated 12 posts for Instagram and LinkedIn... 2h ago" [ref=e179]:
+            - generic [ref=e180]: Social Media Content Pack
+            - generic [ref=e181]: Generated 12 posts for Instagram and LinkedIn...
+            - generic [ref=e182]: 2h ago
+          - button "Landing Page Copy v2 Refined headline and CTA based on heatmap data... 1d ago" [ref=e183]:
+            - generic [ref=e184]: Landing Page Copy v2
+            - generic [ref=e185]: Refined headline and CTA based on heatmap data...
+            - generic [ref=e186]: 1d ago
+    - generic [ref=e44]:
+      - button "New Thread" [ref=e45]:
+        - img [ref=e46]
+        - text: New Thread
+      - generic [ref=e47]:
+        - button [ref=e48]:
+          - img [ref=e49]
+        - generic [ref=e52]:
+          - img [ref=e54]
+          - generic [ref=e57]: Alex M.
+  - generic [ref=e58]:
+    - generic [ref=e59]:
+      - generic [ref=e60]:
+        - 'heading "Email Campaign: Early Access" [level=2] [ref=e62]'
+        - generic [ref=e63]:
+          - button "Share" [ref=e64]:
+            - img [ref=e65]
+            - text: Share
+          - button "Export" [ref=e71]:
+            - img [ref=e72]
+            - text: Export
+      - generic [ref=e76]:
+        - generic [ref=e263]:
+          - generic [ref=e265]: A
+          - generic [ref=e266]:
+            - generic [ref=e267]: Alex M.
+            - generic [ref=e268]: "Create an email campaign for our summer product launch. Target: tech-savvy millennials who have previously purchased from us. Tone: energetic but not hype-y. Include a subject line A/B test."
+            - generic [ref=e269]:
+              - button "competitor-landing-acme.com" [ref=e270]:
+                - img [ref=e271]
+                - generic [ref=e274]: competitor-landing-acme.com
+              - button "Brand Voice Guidelines 2026.pdf" [ref=e275]:
+                - img [ref=e276]
+                - generic [ref=e282]: Brand Voice Guidelines 2026.pdf
+              - button "Q1_Purchase_Cohort.csv" [ref=e283]:
+                - img [ref=e284]
+                - generic [ref=e289]: Q1_Purchase_Cohort.csv
+            - generic [ref=e290]: "Output: Email"
+        - generic [ref=e292]:
+          - button "Agent finished 5/5" [ref=e293]:
+            - img [ref=e294]
+            - generic [ref=e296]: Agent finished
+            - generic [ref=e297]: 5/5
+            - img [ref=e298]
+          - generic [ref=e301]:
+            - generic [ref=e302]:
+              - img [ref=e304]
+              - generic [ref=e306]:
+                - generic [ref=e307]:
+                  - generic [ref=e308]: Analyzing brand voice guidelines
+                  - generic [ref=e309]: 14:02:10
+                - paragraph [ref=e310]: "Extracted tone pillars: Direct, Playful, Expert"
+            - generic [ref=e311]:
+              - img [ref=e313]
+              - generic [ref=e315]:
+                - generic [ref=e316]:
+                  - generic [ref=e317]: Researching competitor landing pages
+                  - generic [ref=e318]: 14:02:35
+                - paragraph [ref=e319]: Analyzed 4 competitor email sequences
+            - generic [ref=e320]:
+              - img [ref=e322]
+              - generic [ref=e324]:
+                - generic [ref=e325]:
+                  - generic [ref=e326]: Segmenting audience from Q1 cohort
+                  - generic [ref=e327]: 14:03:05
+                - paragraph [ref=e328]: Filtered 2,400 repeat buyers, avg. LTV $340
+            - generic [ref=e329]:
+              - img [ref=e331]
+              - generic [ref=e333]:
+                - generic [ref=e334]:
+                  - generic [ref=e335]: Drafting email sequence
+                  - generic [ref=e336]: 14:04:20
+                - paragraph [ref=e337]: Generated 3-email flow with A/B subject lines
+            - generic [ref=e338]:
+              - img [ref=e340]
+              - generic [ref=e342]:
+                - generic [ref=e343]:
+                  - generic [ref=e344]: Applying brand voice polish
+                  - generic [ref=e345]: 14:05:01
+                - paragraph [ref=e346]: Tuned language to match Direct+Playful tone
+        - generic [ref=e348]:
+          - paragraph [ref=e349]: I have created a 3-email sequence targeting your repeat buyers. The campaign opens with curiosity (not discounting) to protect brand equity, builds urgency through social proof in email 2, and closes with a clear CTA in email 3.
+          - paragraph [ref=e350]:
+            - strong [ref=e351]: "Key strategic choices:"
+          - list [ref=e352]:
+            - listitem [ref=e353]:
+              - strong [ref=e354]: "Subject line A/B:"
+              - text: "\"Your early pass is waiting\" vs \"Something new is coming (and you are first)\""
+            - listitem [ref=e355]:
+              - strong [ref=e356]: No discounting
+              - text: in the opening — preserves perceived value
+            - listitem [ref=e357]:
+              - strong [ref=e358]: Social proof
+              - text: pulled from Q1 testimonials to build trust
+            - listitem [ref=e359]:
+              - strong [ref=e360]: Single CTA per email
+              - text: to reduce decision fatigue
+        - generic [ref=e362]:
+          - generic [ref=e364]:
+            - generic [ref=e365]:
+              - generic [ref=e366]: Email
+              - generic [ref=e367]: v1
+            - 'heading "Summer Launch: Early Access Email Sequence" [level=3] [ref=e368]'
+            - paragraph [ref=e369]: "## Email 1: The Teaser (Send: T-7 days) **Subject A:** Your early pass is waiting..."
+          - generic [ref=e370]:
+            - button "Open" [active] [ref=e371]:
+              - img [ref=e372]
+              - text: Open
+            - button "Edit" [ref=e375]:
+              - img [ref=e376]
+              - text: Edit
+            - button "Export" [ref=e379]:
+              - img [ref=e380]
+              - text: Export
+    - generic [ref=e152]:
+      - textbox "Ask your agent or describe what you need..." [ref=e153]
+      - generic [ref=e154]:
+        - button [ref=e156]:
+          - img [ref=e157]
+        - generic [ref=e159]:
+          - button "Output Type" [ref=e161]:
+            - text: Output Type
+            - img [ref=e162]
+          - button "Run" [disabled] [ref=e164]:
+            - img [ref=e165]
+            - text: Run
+  - generic [ref=e385]:
+    - generic [ref=e386]:
+      - generic [ref=e387]:
+        - generic [ref=e388]: Email
+        - 'heading "Summer Launch: Early Access Email Sequence" [level=2] [ref=e389]'
+        - generic [ref=e390]: v1
+      - button [ref=e391]:
+        - img [ref=e392]
+    - generic [ref=e395]:
+      - generic [ref=e398]:
+        - 'heading "Email 1: The Teaser (Send: T-7 days)" [level=2] [ref=e399]'
+        - paragraph [ref=e400]:
+          - strong [ref=e401]: "Subject A:"
+          - text: Your early pass is waiting
+          - strong [ref=e402]: "Subject B:"
+          - text: Something new is coming (and you are first)
+        - separator [ref=e403]
+        - paragraph [ref=e404]: Hey [First Name],
+        - paragraph [ref=e405]: You have been with us since the beginning — and that means something.
+        - paragraph [ref=e406]: In 7 days, we are dropping something we have been quietly building for months. No crowdfunding. No hype cycle. Just a product we could not stop using ourselves.
+        - paragraph [ref=e407]:
+          - strong [ref=e408]: As a repeat customer, you get first access.
+          - text: No lines. No FOMO. Just a 48-hour head start before we open it up.
+        - paragraph [ref=e409]: "[Get Early Access]"
+        - paragraph [ref=e410]: — The team
+        - separator [ref=e411]
+        - 'heading "Email 2: The Proof (Send: T-3 days)" [level=2] [ref=e412]'
+        - paragraph [ref=e413]:
+          - strong [ref=e414]: "Subject:"
+          - text: "\"I was not sure until I tried it\" — beta tester feedback"
+        - separator [ref=e415]
+        - paragraph [ref=e416]: Hi [First Name],
+        - paragraph [ref=e417]: "The early access window opens in 3 days. Here is what our beta crew is saying:"
+        - blockquote [ref=e418]:
+          - paragraph [ref=e419]: "\"I have tried every alternative on the market. This is the first one that actually stuck.\" — Marcus T., beta user since March"
+        - blockquote [ref=e420]:
+          - paragraph [ref=e421]: "\"The onboarding took 4 minutes. I was skeptical. Now I am evangelizing.\" — Priya K., product designer"
+        - paragraph [ref=e422]:
+          - strong [ref=e423]: Your 48-hour window opens Thursday at 9am ET.
+        - paragraph [ref=e424]: "[Set a Reminder]"
+        - separator [ref=e425]
+        - 'heading "Email 3: The Open (Send: Launch day)" [level=2] [ref=e426]'
+        - paragraph [ref=e427]:
+          - strong [ref=e428]: "Subject:"
+          - text: It is live. Your 48-hour window starts now.
+        - separator [ref=e429]
+        - paragraph [ref=e430]: "[First Name],"
+        - paragraph [ref=e431]:
+          - strong [ref=e432]: The early access window is open.
+        - paragraph [ref=e433]: You have 48 hours before we open this to the general list. Based on your Q1 purchase history, I think this one is going to land squarely in your wheelhouse.
+        - paragraph [ref=e434]: "[Claim Your Spot]"
+        - paragraph [ref=e435]: Questions? Hit reply — it goes straight to me.
+        - paragraph [ref=e436]: — Sarah, Head of Product
+      - generic [ref=e438]:
+        - generic [ref=e439]:
+          - heading "Artifact Chat" [level=3] [ref=e440]
+          - paragraph [ref=e441]: Refine this artifact inline
+        - generic [ref=e443]:
+          - img [ref=e445]
+          - generic [ref=e448]: I'm scoped to this artifact. Ask me to revise, expand, or refine anything.
+        - generic [ref=e450]:
+          - textbox "Make it punchier..." [ref=e451]
+          - button [disabled] [ref=e452]:
+            - img [ref=e453]
+    - generic [ref=e456]:
+      - button "Edit" [ref=e458]:
+        - img [ref=e459]
+        - text: Edit
+      - generic [ref=e462]:
+        - button "Save Draft" [ref=e463]:
+          - img [ref=e464]
+          - text: Save Draft
+        - button "Export" [ref=e468]:
+          - img [ref=e469]
+          - text: Export
+        - button "Mark as Final" [ref=e472]:
+          - img [ref=e473]
+          - text: Mark as Final

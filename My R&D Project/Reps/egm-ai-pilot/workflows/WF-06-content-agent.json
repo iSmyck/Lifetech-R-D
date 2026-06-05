@@ -1,0 +1,79 @@
+{
+  "name": "WF-06 Content Agent",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "id": "assemble-context",
+      "name": "Assemble Content Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "parameters": {
+        "jsCode": "// Load content prompt + content-creation skill + localization insights\nconst input = $input.first().json;\nconst context = {\n  system_prompt: '{{ content-generation prompt }}',\n  skill: '{{ content-creation skill }}',\n  content_brief: input.content_brief || {},\n  localized_insights: input.localized_insights || {},\n  few_shot_examples: input.few_shot_examples || [],\n  query_id: input.query_id\n};\nreturn { json: context };"
+      }
+    },
+    {
+      "id": "generate-content",
+      "name": "Generate Content (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [600, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_BASE_URL }}/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "claude-3-5-sonnet-20241022",
+          "max_tokens": 4096,
+          "temperature": 0.7,
+          "system": "You are the Content Generation Agent. Generate marketing content with cultural integration. Output JSON only.",
+          "messages": [{"role": "user", "content": "={{ JSON.stringify($json) }}"}]
+        }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "llm-auth", "name": "LLM Auth" } }
+    },
+    {
+      "id": "validate-output",
+      "name": "Validate Output Schema",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "parameters": {
+        "jsCode": "// Validate against content-output schema\nconst response = $input.first().json;\nconst content = response.content?.[0]?.text || response.content || '{}';\nlet output;\ntry {\n  output = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (e) {\n  output = { query_id: $json.query_id, error: 'Invalid JSON output' };\n}\noutput.agent_name = 'content_generation';\noutput.model_used = 'claude-3-5-sonnet-20241022';\nreturn { json: output };"
+      }
+    },
+    {
+      "id": "return",
+      "name": "Return to Router",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [1000, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [[{"node": "Assemble Content Context", "type": "main", "index": 0}]]
+    },
+    "Assemble Content Context": {
+      "main": [[{"node": "Generate Content (LLM)", "type": "main", "index": 0}]]
+    },
+    "Generate Content (LLM)": {
+      "main": [[{"node": "Validate Output Schema", "type": "main", "index": 0}]]
+    },
+    "Validate Output Schema": {
+      "main": [[{"node": "Return to Router", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

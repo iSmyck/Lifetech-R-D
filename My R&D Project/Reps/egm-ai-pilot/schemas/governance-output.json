@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Governance Agent Output",
+  "description": "Output schema for the Governance / Compliance Agent",
+  "type": "object",
+  "required": ["query_id", "compliance_report", "flag_for_hitl", "confidence_score", "timestamp"],
+  "properties": {
+    "query_id": { "type": "string", "format": "uuid" },
+    "compliance_report": {
+      "type": "object",
+      "required": ["overall_status", "regulatory_findings", "platform_policy_findings", "egm_ai_policy_redlines_violations", "claims_substantiation_status"],
+      "properties": {
+        "overall_status": { "type": "string", "enum": ["compliant", "needs_review", "non_compliant"] },
+        "regulatory_findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "regulation_body": { "type": "string" },
+              "issue_type": { "type": "string" },
+              "description": { "type": "string" },
+              "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+              "recommended_action": { "type": "string" }
+            }
+          }
+        },
+        "platform_policy_findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "platform": { "type": "string" },
+              "policy_violation": { "type": "string" },
+              "description": { "type": "string" },
+              "severity": { "type": "string" }
+            }
+          }
+        },
+        "egm_ai_policy_redlines_violations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "redline_category": { "type": "string" },
+              "description": { "type": "string" },
+              "severity": { "type": "string", "enum": ["critical"] }
+            }
+          }
+        },
+        "claims_substantiation_status": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "claim": { "type": "string" },
+              "status": { "type": "string", "enum": ["substantiated", "unsubstantiated"] },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "flag_for_hitl": { "type": "boolean" },
+    "confidence_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "timestamp": { "type": "string", "format": "date-time" }
+  }
+}

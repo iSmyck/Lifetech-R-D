@@ -1,0 +1,98 @@
+{
+  "name": "WF-03 Localization Agent",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "id": "assemble-context",
+      "name": "Assemble Localization Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "parameters": {
+        "jsCode": "// Load localization prompt + cultural-analysis skill + session context\nconst input = $input.first().json;\nconst context = {\n  system_prompt: '{{ localization prompt }}',\n  skill: '{{ cultural-analysis skill }}',\n  content_to_localize: input.content_to_localize || {},\n  target_market: input.target_market || {},\n  localization_instructions: input.localization_instructions || {},\n  query_id: input.query_id\n};\nreturn { json: context };"
+      }
+    },
+    {
+      "id": "cultural-analysis",
+      "name": "Cultural Analysis (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [600, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_BASE_URL }}/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "claude-3-5-sonnet-20241022",
+          "max_tokens": 4096,
+          "temperature": 0.5,
+          "system": "You are the Localization Agent. Perform cultural analysis and localization. Output JSON only.",
+          "messages": [{"role": "user", "content": "={{ JSON.stringify($json) }}"}]
+        }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "llm-auth", "name": "LLM Auth" } }
+    },
+    {
+      "id": "validate-output",
+      "name": "Validate Output Schema",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "parameters": {
+        "jsCode": "// Validate against localization-output schema\nconst response = $input.first().json;\nconst content = response.content?.[0]?.text || response.content || '{}';\nlet output;\ntry {\n  output = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (e) {\n  output = { query_id: $json.query_id, error: 'Invalid JSON output' };\n}\n// Add metadata\noutput.agent_name = 'localization';\noutput.timestamp = new Date().toISOString();\nreturn { json: output };"
+      }
+    },
+    {
+      "id": "attach-metadata",
+      "name": "Attach Metadata",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1000, 300],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "agent-name", "name": "agent_name", "value": "localization", "type": "string" },
+            { "id": "model-used", "name": "model_used", "value": "claude-3-5-sonnet-20241022", "type": "string" }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "return",
+      "name": "Return to Router",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [1200, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [[{"node": "Assemble Localization Context", "type": "main", "index": 0}]]
+    },
+    "Assemble Localization Context": {
+      "main": [[{"node": "Cultural Analysis (LLM)", "type": "main", "index": 0}]]
+    },
+    "Cultural Analysis (LLM)": {
+      "main": [[{"node": "Validate Output Schema", "type": "main", "index": 0}]]
+    },
+    "Validate Output Schema": {
+      "main": [[{"node": "Attach Metadata", "type": "main", "index": 0}]]
+    },
+    "Attach Metadata": {
+      "main": [[{"node": "Return to Router", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

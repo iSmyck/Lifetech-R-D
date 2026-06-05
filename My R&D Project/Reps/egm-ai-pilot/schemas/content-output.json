@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Content Generation Agent Output",
+  "description": "Output schema for the Content Generation Agent",
+  "type": "object",
+  "required": ["query_id", "generated_content", "creative_summary", "timestamp"],
+  "properties": {
+    "query_id": { "type": "string", "format": "uuid" },
+    "generated_content": {
+      "type": "object",
+      "required": ["primary_language_content"],
+      "properties": {
+        "primary_language_content": {
+          "type": "object",
+          "required": ["headline", "body", "call_to_action"],
+          "properties": {
+            "headline": { "type": "string" },
+            "body": { "type": "string" },
+            "call_to_action": { "type": "string" },
+            "hashtags": { "type": "array", "items": { "type": "string" } },
+            "hook_type_used": { "type": "string" }
+          }
+        },
+        "secondary_language_content": {
+          "type": "object",
+          "properties": {
+            "headline": { "type": "string" },
+            "body": { "type": "string" },
+            "call_to_action": { "type": "string" },
+            "hashtags": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "variant_id": { "type": "string" },
+              "text": { "type": "string" },
+              "hook_type": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "creative_summary": {
+      "type": "object",
+      "properties": {
+        "cultural_elements_incorporated": { "type": "string" },
+        "few_shot_inspiration": { "type": "string" },
+        "adherence_to_brief": { "type": "string" },
+        "potential_improvements": { "type": "string" }
+      }
+    },
+    "timestamp": { "type": "string", "format": "date-time" }
+  }
+}

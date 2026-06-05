@@ -1,0 +1,196 @@
+{
+  "name": "WF-02 Router",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "id": "assemble-context",
+      "name": "Assemble Router Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "parameters": {
+        "jsCode": "// Load router prompt + skills\nconst input = $input.first().json;\nconst context = {\n  system_prompt: '{{ router prompt }}',\n  user_query: input.user_query,\n  classified_intent: input.classified_intent || 'multi_intent',\n  user_context: input.user_context || {}\n};\nreturn { json: context };"
+      }
+    },
+    {
+      "id": "analyze-complexity",
+      "name": "Analyze Complexity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [600, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_BASE_URL }}/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "claude-3-5-haiku-20241022",
+          "max_tokens": 2048,
+          "temperature": 0.1,
+          "system": "You are the Router. Analyze complexity, identify required agents, create execution plan. Output JSON only.",
+          "messages": [{"role": "user", "content": "={{ JSON.stringify($json) }}"}]
+        }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "llm-auth", "name": "LLM Auth" } }
+    },
+    {
+      "id": "parse-plan",
+      "name": "Parse Execution Plan",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "parameters": {
+        "jsCode": "// Parse LLM response into execution plan\nconst response = $input.first().json;\nconst content = response.content?.[0]?.text || response.content || '{}';\nlet plan;\ntry {\n  plan = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (e) {\n  plan = { execution_plan: [], complexity_assessment: 'simple' };\n}\nreturn { json: plan };"
+      }
+    },
+    {
+      "id": "check-simple",
+      "name": "Simple Query?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1000, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "simple-check", "leftValue": "={{ $json.complexity_assessment }}", "rightValue": "simple", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "direct-agent",
+      "name": "Call Single Agent",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1200, 200],
+      "parameters": {
+        "jsCode": "// Simple query: route directly to single agent\nconst plan = $input.first().json;\nconst agent = plan.execution_plan?.[0]?.agent || 'content_agent';\nconst workflowMap = {\n  'localization_agent': 'WF-03-localization-agent',\n  'governance_agent': 'WF-04-governance-agent',\n  'performance_agent': 'WF-05-performance-agent',\n  'content_agent': 'WF-06-content-agent'\n};\nreturn { json: { ...plan, target_workflow: workflowMap[agent] || 'WF-06-content-agent', mode: 'direct' } };"
+      }
+    },
+    {
+      "id": "parallel-localization",
+      "name": "Call Localization (WF-03)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1400, 100],
+      "parameters": {
+        "workflowId": "WF-03-localization-agent",
+        "options": {}
+      }
+    },
+    {
+      "id": "parallel-governance",
+      "name": "Call Governance (WF-04)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1400, 250],
+      "parameters": {
+        "workflowId": "WF-04-governance-agent",
+        "options": {}
+      }
+    },
+    {
+      "id": "parallel-performance",
+      "name": "Call Performance (WF-05)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1400, 400],
+      "parameters": {
+        "workflowId": "WF-05-performance-agent",
+        "options": {}
+      }
+    },
+    {
+      "id": "merge-parallel",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1600, 250],
+      "parameters": {
+        "mode": "mergeByIndex"
+      }
+    },
+    {
+      "id": "call-content",
+      "name": "Call Content (WF-06)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1800, 250],
+      "parameters": {
+        "workflowId": "WF-06-content-agent",
+        "options": {}
+      }
+    },
+    {
+      "id": "format-results",
+      "name": "Format Aggregated Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [2000, 250],
+      "parameters": {
+        "jsCode": "// Aggregate all agent outputs into unified structure\nconst inputs = $input.all();\nconst outputs = {};\ninputs.forEach((item, idx) => {\n  const agentNames = ['localization', 'governance', 'performance', 'content'];\n  outputs[agentNames[idx] || `agent_${idx}`] = item.json;\n});\nreturn { json: { agent_outputs: outputs, routing_complete: true } };"
+      }
+    },
+    {
+      "id": "return-to-coordinator",
+      "name": "Return to Coordinator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [2200, 250]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [[{"node": "Assemble Router Context", "type": "main", "index": 0}]]
+    },
+    "Assemble Router Context": {
+      "main": [[{"node": "Analyze Complexity", "type": "main", "index": 0}]]
+    },
+    "Analyze Complexity": {
+      "main": [[{"node": "Parse Execution Plan", "type": "main", "index": 0}]]
+    },
+    "Parse Execution Plan": {
+      "main": [[{"node": "Simple Query?", "type": "main", "index": 0}]]
+    },
+    "Simple Query?": {
+      "main": [
+        [{"node": "Call Single Agent", "type": "main", "index": 0}],
+        [{"node": "Call Localization (WF-03)", "type": "main", "index": 0}]
+      ]
+    },
+    "Call Single Agent": {
+      "main": [[{"node": "Format Aggregated Results", "type": "main", "index": 0}]]
+    },
+    "Call Localization (WF-03)": {
+      "main": [[{"node": "Merge Results", "type": "main", "index": 0}]]
+    },
+    "Call Governance (WF-04)": {
+      "main": [[{"node": "Merge Results", "type": "main", "index": 0}]]
+    },
+    "Call Performance (WF-05)": {
+      "main": [[{"node": "Merge Results", "type": "main", "index": 0}]]
+    },
+    "Merge Results": {
+      "main": [[{"node": "Call Content (WF-06)", "type": "main", "index": 0}]]
+    },
+    "Call Content (WF-06)": {
+      "main": [[{"node": "Format Aggregated Results", "type": "main", "index": 0}]]
+    },
+    "Format Aggregated Results": {
+      "main": [[{"node": "Return to Coordinator", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

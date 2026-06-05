@@ -1,0 +1,199 @@
+{
+  "name": "BA/SA Assistant — Document Orchestrator",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-exec",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.WORKFLOW_ID_INPUT_ANALYZER }}",
+        "options": {}
+      },
+      "id": "step1",
+      "name": "Step 1: Input Analyzer",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.WORKFLOW_ID_RAG_RESEARCHER }}",
+        "options": {}
+      },
+      "id": "step2",
+      "name": "Step 2: RAG Researcher",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        620,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.WORKFLOW_ID_TEMPLATE_SELECTOR }}",
+        "options": {}
+      },
+      "id": "step3",
+      "name": "Step 3: Template Selector",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.WORKFLOW_ID_DOCUMENT_COMPOSER }}",
+        "options": {}
+      },
+      "id": "step4",
+      "name": "Step 4: Document Composer",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1020,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.WORKFLOW_ID_DIAGRAM_GENERATOR }}",
+        "options": {}
+      },
+      "id": "step5",
+      "name": "Step 5: Diagram Generator",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.WORKFLOW_ID_DOCUMENT_ASSEMBLER }}",
+        "options": {}
+      },
+      "id": "step6",
+      "name": "Step 6: Document Assembler",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format the final response for chat\nconst result = $input.first().json;\n\nconst preview = result.content ? result.content.substring(0, 2000) + '...' : 'Document generated.';\n\nconst response = `## ✅ Document Draft Created\\\\n\\\\n**Title:** ${result.title || 'Untitled'}\\\\n**Type:** ${result.templateName || 'Document'}\\\\n**Draft ID:** ${result.documentId || 'N/A'}\\\\n**Diagrams:** ${(result.diagrams || []).length} generated\\\\n\\\\n---\\\\n\\\\n### Preview\\\\n\\\\n${preview}\\\\n\\\\n---\\\\n\\\\n⏳ **Awaiting your review...**\\\\n\\\\nReply with:\\n- **\\\"Approve\\\"** to publish to Wiki.js\\n- **\\\"Edit: [your changes]\\\"** to request modifications\\n- **\\\"Reject\\\"** to discard this draft`;\n\nreturn [{\n  json: {\n    response: response,\n    documentId: result.documentId,\n    title: result.title,\n    content: result.content,\n    markdown: result.markdown,\n    diagrams: result.diagrams,\n    status: 'pending_review',\n    intent: 'CREATE_DOCUMENT',\n    sessionId: result.sessionId\n  }\n}];"
+      },
+      "id": "format-chat-response",
+      "name": "Format Chat Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Step 1: Input Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 1: Input Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Step 2: RAG Researcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 2: RAG Researcher": {
+      "main": [
+        [
+          {
+            "node": "Step 3: Template Selector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 3: Template Selector": {
+      "main": [
+        [
+          {
+            "node": "Step 4: Document Composer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 4: Document Composer": {
+      "main": [
+        [
+          {
+            "node": "Step 5: Diagram Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 5: Diagram Generator": {
+      "main": [
+        [
+          {
+            "node": "Step 6: Document Assembler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 6: Document Assembler": {
+      "main": [
+        [
+          {
+            "node": "Format Chat Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "ba-sa-assistant",
+    "document-orchestrator"
+  ]
+}

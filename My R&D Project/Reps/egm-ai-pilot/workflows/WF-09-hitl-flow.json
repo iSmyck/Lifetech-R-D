@@ -1,0 +1,193 @@
+{
+  "name": "WF-09 HITL Review Flow",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "id": "store-review",
+      "name": "Store Review in DB",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO hitl_queue (query_id, flagged_by, flag_reason, severity, review_package, status) VALUES ($1, $2, $3, $4, $5, 'pending') RETURNING review_id;",
+        "options": {}
+      },
+      "credentials": { "postgres": { "id": "postgres-default", "name": "Postgres Default" } }
+    },
+    {
+      "id": "format-package",
+      "name": "Format Review Package",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [600, 300],
+      "parameters": {
+        "jsCode": "// Format review package for reviewer\nconst input = $input.first().json;\nconst reviewId = input[0]?.review_id || input.review_id || crypto.randomUUID();\nconst package = {\n  review_id: reviewId,\n  original_query: input.original_query || {},\n  agent_outputs: input.agent_outputs || {},\n  flags: input.flags || [],\n  recommended_actions: input.recommended_actions || [],\n  status: 'pending_review'\n};\nreturn { json: package };"
+      }
+    },
+    {
+      "id": "return-pending",
+      "name": "Return Pending Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [800, 200],
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ review_id: $json.review_id, status: 'pending_review', message: 'Human review required' }) }}"
+      }
+    },
+    {
+      "id": "review-webhook",
+      "name": "Receive Review Decision",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [800, 500],
+      "webhookId": "review",
+      "path": "api/v1/review/{review_id}",
+      "responseMode": "responseNode",
+      "httpMethod": "POST"
+    },
+    {
+      "id": "route-decision",
+      "name": "Route Decision",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [1000, 500],
+      "parameters": {
+        "rules": {
+          "rules": [
+            { "value": "approve", "output": 0 },
+            { "value": "reject", "output": 1 },
+            { "value": "edit", "output": 2 }
+          ]
+        },
+        "dataType": "string",
+        "value1": "={{ $json.reviewer_decision }}",
+        "fallbackOutput": 1
+      }
+    },
+    {
+      "id": "approve-review",
+      "name": "Approve Review",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1200, 400],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE hitl_queue SET status = 'approved', reviewer_decision = 'approve', reviewer_notes = $1, reviewed_at = NOW() WHERE review_id = $2 RETURNING *;",
+        "options": {}
+      },
+      "credentials": { "postgres": { "id": "postgres-default", "name": "Postgres Default" } }
+    },
+    {
+      "id": "save-case-memory",
+      "name": "Save to Case Memory",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1400, 400],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO case_memory (query_id, market, product_category, intent_type, input_summary, approved_output, approved_by) VALUES ($1, $2, $3, $4, $5, $6, $7);",
+        "options": {}
+      },
+      "credentials": { "postgres": { "id": "postgres-default", "name": "Postgres Default" } }
+    },
+    {
+      "id": "reject-review",
+      "name": "Reject Review",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1200, 500],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE hitl_queue SET status = 'rejected', reviewer_decision = 'reject', reviewer_notes = $1, reviewed_at = NOW() WHERE review_id = $2 RETURNING *;",
+        "options": {}
+      },
+      "credentials": { "postgres": { "id": "postgres-default", "name": "Postgres Default" } }
+    },
+    {
+      "id": "edit-review",
+      "name": "Edit Review",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1200, 600],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE hitl_queue SET status = 'edited', reviewer_decision = 'edit', reviewer_notes = $1, reviewed_at = NOW() WHERE review_id = $2 RETURNING *;",
+        "options": {}
+      },
+      "credentials": { "postgres": { "id": "postgres-default", "name": "Postgres Default" } }
+    },
+    {
+      "id": "save-edited-case",
+      "name": "Save Edited Case Memory",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1400, 600],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO case_memory (query_id, market, product_category, intent_type, input_summary, approved_output, approved_by) VALUES ($1, $2, $3, $4, $5, $6, $7);",
+        "options": {}
+      },
+      "credentials": { "postgres": { "id": "postgres-default", "name": "Postgres Default" } }
+    },
+    {
+      "id": "return-result",
+      "name": "Return Review Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1600, 500],
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ review_id: $json.review_id, status: $json.status, decision: $json.reviewer_decision }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [[{"node": "Store Review in DB", "type": "main", "index": 0}]]
+    },
+    "Store Review in DB": {
+      "main": [[{"node": "Format Review Package", "type": "main", "index": 0}]]
+    },
+    "Format Review Package": {
+      "main": [[{"node": "Return Pending Status", "type": "main", "index": 0}]]
+    },
+    "Receive Review Decision": {
+      "main": [[{"node": "Route Decision", "type": "main", "index": 0}]]
+    },
+    "Route Decision": {
+      "main": [
+        [{"node": "Approve Review", "type": "main", "index": 0}],
+        [{"node": "Reject Review", "type": "main", "index": 0}],
+        [{"node": "Edit Review", "type": "main", "index": 0}]
+      ]
+    },
+    "Approve Review": {
+      "main": [[{"node": "Save to Case Memory", "type": "main", "index": 0}]]
+    },
+    "Save to Case Memory": {
+      "main": [[{"node": "Return Review Result", "type": "main", "index": 0}]]
+    },
+    "Reject Review": {
+      "main": [[{"node": "Return Review Result", "type": "main", "index": 0}]]
+    },
+    "Edit Review": {
+      "main": [[{"node": "Save Edited Case Memory", "type": "main", "index": 0}]]
+    },
+    "Save Edited Case Memory": {
+      "main": [[{"node": "Return Review Result", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,0 +1,3 @@
+[     177ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/chunk-YZVM2MHU.js?v=9ca1f078:21550
+[   72021ms] [LOG] simulate called {content: Create a social media campaign, outputType: null, activeThreadId: thread-1} @ http://localhost:5173/src/hooks/useAgentSimulation.ts?t=1779315168576:6
+[   72021ms] [LOG] adding userBlock {id: b-1779315325577, threadId: thread-1, createdAt: 2026-05-20T22:15:25.577Z, type: user-prompt, content: Create a social media campaign} @ http://localhost:5173/src/hooks/useAgentSimulation.ts?t=1779315168576:21

@@ -1,0 +1,625 @@
+{
+  "name": "AstroBot 05 - Daily Forecast Cron",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "expression": "06"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300],
+      "id": "cron-trigger-05",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, telegram_id, full_name, birth_date, birth_time, birth_city, birth_latitude, birth_longitude, birth_timezone, birth_nation, chart_context_xml, forecast_location_latitude, forecast_location_longitude, forecast_timezone FROM users WHERE daily_forecast_enabled = TRUE AND chart_calculated_at IS NOT NULL;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [420, 300],
+      "id": "postgres-get-users-05",
+      "name": "Get Users for Forecast",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const users = $input.first().json.body || [];\nreturn users.map(user => ({ json: user }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 300],
+      "id": "split-users-05",
+      "name": "Split Users"
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [860, 300],
+      "id": "batch-users-05",
+      "name": "Batch Users"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst today = new Date().toISOString().split('T')[0];\nreturn [{ json: { ...item, today, forecast_date: today } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 300],
+      "id": "check-today-05",
+      "name": "Check Today"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id FROM daily_forecasts WHERE user_id = $1 AND forecast_date = $2 LIMIT 1;",
+        "options": {
+          "queryParams": {
+            "parameters": [
+              { "name": "user_id", "value": "={{ $json.id }}" },
+              { "name": "forecast_date", "value": "={{ $json.today }}" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [1300, 300],
+      "id": "postgres-check-sent-05",
+      "name": "Check Already Sent",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst alreadySent = (item.body || []).length > 0;\nreturn [{ json: { ...item, skip: alreadySent } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 300],
+      "id": "determine-skip-05",
+      "name": "Determine Skip"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "should-skip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "name": "boolean.equals",
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1740, 300],
+      "id": "if-skip-05",
+      "name": "Skip?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst now = new Date();\nconst lat = item.forecast_location_latitude || item.birth_latitude;\nconst lon = item.forecast_location_longitude || item.birth_longitude;\nconst tz = item.forecast_timezone || item.birth_timezone;\n\nconst birthDate = new Date(item.birth_date);\nconst birthTime = item.birth_time || '12:00';\nconst [birthHour, birthMinute] = birthTime.split(':');\n\nreturn [{\n  json: {\n    ...item,\n    transit_subject: {\n      name: 'Transit',\n      year: now.getFullYear(),\n      month: now.getMonth() + 1,\n      day: now.getDate(),\n      hour: 12,\n      minute: 0,\n      second: 0,\n      longitude: lon,\n      latitude: lat,\n      timezone: tz\n    },\n    first_subject: {\n      name: item.full_name,\n      year: birthDate.getFullYear(),\n      month: birthDate.getMonth() + 1,\n      day: birthDate.getDate(),\n      hour: parseInt(birthHour),\n      minute: parseInt(birthMinute),\n      second: 0,\n      longitude: item.birth_longitude,\n      latitude: item.birth_latitude,\n      timezone: item.birth_timezone,\n      city: item.birth_city,\n      nation: item.birth_nation\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1960, 220],
+      "id": "build-transit-body-05",
+      "name": "Build Transit Body"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://astrologer.p.rapidapi.com/api/v5/context/transit",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RapidAPI-Host",
+              "value": "astrologer.p.rapidapi.com"
+            },
+            {
+              "name": "X-RapidAPI-Key",
+              "value": "={{ $env.ASTROLOGER_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "first_subject",
+              "value": "={{ JSON.stringify($json.first_subject) }}"
+            },
+            {
+              "name": "transit_subject",
+              "value": "={{ JSON.stringify($json.transit_subject) }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2180, 220],
+      "id": "astro-api-transit-05",
+      "name": "Astrologer API Transit"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst transitContext = item.body?.context || '';\nconst natalContext = item.chart_context_xml || '';\nconst date = item.forecast_date;\nconst fullName = item.full_name || 'Пользователь';\n\nconst prompt = `Имя клиента: ${fullName}\n\n## Натальная карта:\n${natalContext}\n\n## Текущие транзиты:\n${transitContext}\n\n## Дата прогноза: ${date}\n\nСоставь ежедневный астрологический прогноз. Опиши 2-3 ключевых транзита дня, свяжи их с натальными положениями. Дай практические рекомендации.\n\nИспользуй инструмент поиска по астрологической базе знаний для уточнения интерпретаций транзитных аспектов.`;\n\nreturn [{\n  json: {\n    ...item,\n    transit_context_xml: transitContext,\n    prompt_text: prompt\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2400, 220],
+      "id": "format-forecast-prompt-05",
+      "name": "Format Forecast Prompt"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.prompt_text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Ты — астролог-прогнозист. Ты составляешь ежедневные астрологические прогнозы на основе текущих транзитов планет относительно натальной карты человека.\n\nПравила:\n1. Используй инструмент поиска для уточнения интерпретаций транзитных аспектов.\n2. Опиши 2-3 ключевых транзита дня с конкретными планетами и аспектами.\n3. Свяжи транзиты с натальными положениями (дома, натальные планеты).\n4. Дай практические рекомендации на день.\n5. Тон: позитивный, но реалистичный. Избегай пугающих формулировок.\n6. Максимум 2500 символов. Русский язык.\n7. НЕ выдумывай транзиты — используй только предоставленные данные.",
+          "maxIterations": 3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [2620, 220],
+      "id": "ai-agent-forecast-05",
+      "name": "AI Agent Forecast"
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [2500, 0],
+      "id": "openai-forecast-05",
+      "name": "OpenAI GPT-4o",
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_API_KEY",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionKey": "={{ 'astrobot:forecast:' + $json.telegram_id }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [2620, 0],
+      "id": "memory-forecast-05",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "options": {
+          "tableName": "rag_embeddings",
+          "metadataFilter": ""
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePGVector",
+      "typeVersion": 1.3,
+      "position": [2740, 0],
+      "id": "pgvector-forecast-05",
+      "name": "PGVector RAG",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "text-embedding-3-small",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [2860, 120],
+      "id": "embeddings-forecast-05",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_API_KEY",
+          "name": "OpenAI API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"response\": {\n      \"type\": \"string\",\n      \"description\": \"Ежедневный астрологический прогноз на русском языке\"\n    }\n  },\n  \"required\": [\"response\"]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [2980, 0],
+      "id": "output-parser-forecast-05",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst parsed = item.output || item;\nlet text = '';\nif (typeof parsed === 'object' && parsed !== null) {\n  text = parsed.response || parsed.text || JSON.stringify(parsed);\n} else {\n  text = String(parsed);\n}\nreturn [{\n  json: {\n    ...item,\n    forecast_text: text\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2840, 220],
+      "id": "extract-forecast-05",
+      "name": "Extract Forecast"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "={{ '🔮 Прогноз на ' + $json.forecast_date + ':\\n\\n' + $json.forecast_text }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [3060, 220],
+      "id": "telegram-send-forecast-05",
+      "name": "Send Forecast",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO daily_forecasts (user_id, forecast_date, transit_context_xml, forecast_text, sent_at) VALUES ($1, $2, $3, $4, NOW()) ON CONFLICT (user_id, forecast_date) DO UPDATE SET transit_context_xml = EXCLUDED.transit_context_xml, forecast_text = EXCLUDED.forecast_text, sent_at = NOW();",
+        "options": {
+          "queryParams": {
+            "parameters": [
+              { "name": "user_id", "value": "={{ $json.id }}" },
+              { "name": "forecast_date", "value": "={{ $json.forecast_date }}" },
+              { "name": "transit_context_xml", "value": "={{ $json.transit_context_xml || '' }}" },
+              { "name": "forecast_text", "value": "={{ $json.forecast_text }}" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [3060, 340],
+      "id": "postgres-save-forecast-05",
+      "name": "Save Forecast",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn [{ json: { ...item, disable_forecast: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3280, 280],
+      "id": "handle-telegram-error-05",
+      "name": "Handle Telegram Error"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE users SET daily_forecast_enabled = FALSE WHERE id = $1;",
+        "options": {
+          "queryParams": {
+            "parameters": [
+              { "name": "user_id", "value": "={{ $json.id }}" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [3500, 280],
+      "id": "postgres-disable-forecast-05",
+      "name": "Disable Forecast",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Users for Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Users for Forecast": {
+      "main": [
+        [
+          {
+            "node": "Split Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Users": {
+      "main": [
+        [
+          {
+            "node": "Batch Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batch Users": {
+      "main": [
+        [
+          {
+            "node": "Check Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Today": {
+      "main": [
+        [
+          {
+            "node": "Check Already Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Already Sent": {
+      "main": [
+        [
+          {
+            "node": "Determine Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Skip": {
+      "main": [
+        [
+          {
+            "node": "Skip?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip?": {
+      "main": [
+        [
+          {
+            "node": "Build Transit Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Transit Body": {
+      "main": [
+        [
+          {
+            "node": "Astrologer API Transit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Astrologer API Transit": {
+      "main": [
+        [
+          {
+            "node": "Format Forecast Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Forecast Prompt": {
+      "main": [
+        [
+          {
+            "node": "AI Agent Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent Forecast": {
+      "main": [
+        [
+          {
+            "node": "Extract Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Forecast": {
+      "main": [
+        [
+          {
+            "node": "Send Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Forecast": {
+      "main": [
+        [
+          {
+            "node": "Save Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "onError": [
+        [
+          {
+            "node": "Handle Telegram Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Telegram Error": {
+      "main": [
+        [
+          {
+            "node": "Disable Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI GPT-4o": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent Forecast",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent Forecast",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PGVector RAG": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent Forecast",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "PGVector RAG",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent Forecast",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "AstroBot 07 - Error Handler"
+  },
+  "staticData": null,
+  "tags": ["astrobot", "daily-forecast", "cron", "phase-2", "ai-agent"]
+}

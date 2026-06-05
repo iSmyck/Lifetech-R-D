@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Performance Agent Output",
+  "description": "Output schema for the Performance / Media Agent",
+  "type": "object",
+  "required": ["query_id", "media_strategy", "performance_forecast", "timestamp"],
+  "properties": {
+    "query_id": { "type": "string", "format": "uuid" },
+    "media_strategy": {
+      "type": "object",
+      "required": ["recommended_channels", "budget_allocation", "creative_fatigue_prediction", "testing_matrix"],
+      "properties": {
+        "recommended_channels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "platform": { "type": "string" },
+              "placement": { "type": "string" },
+              "rationale": { "type": "string" },
+              "audience_fit_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+              "estimated_cpm_range": { "type": "string" },
+              "estimated_spend": { "type": "number" },
+              "bid_strategy_suggestion": { "type": "string" }
+            }
+          }
+        },
+        "budget_allocation": {
+          "type": "object",
+          "required": ["total", "by_platform"],
+          "properties": {
+            "total": { "type": "number" },
+            "by_platform": { "type": "object", "additionalProperties": { "type": "number" } }
+          }
+        },
+        "creative_fatigue_prediction": {
+          "type": "object",
+          "properties": {
+            "risk_level": { "type": "string", "enum": ["low", "medium", "high"] },
+            "refresh_frequency_suggestion": { "type": "string" },
+            "reasoning": { "type": "string" }
+          }
+        },
+        "testing_matrix": {
+          "type": "object",
+          "properties": {
+            "variables": { "type": "array", "items": { "type": "string" } },
+            "priority_tests": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "performance_forecast": {
+      "type": "object",
+      "properties": {
+        "estimated_reach": { "type": "string" },
+        "estimated_impressions": { "type": "string" },
+        "estimated_clicks": { "type": "string" },
+        "estimated_conversions": { "type": "string" },
+        "confidence_level": { "type": "string", "enum": ["low", "medium", "high"] }
+      }
+    },
+    "platform_comparison": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" }
+  }
+}

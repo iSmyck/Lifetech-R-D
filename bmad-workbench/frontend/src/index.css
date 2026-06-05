@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bmad-bg: #ffffff;
+    --bmad-surface: #f6f8fa;
+    --bmad-surface-raised: #ffffff;
+    --bmad-border: rgba(31, 35, 40, 0.15);
+    --bmad-text: #1f2328;
+    --bmad-muted: #656d76;
+    --bmad-shadow-sm: 0 1px 2px rgba(31, 35, 40, 0.04);
+    --bmad-shadow-md: 0 4px 12px rgba(31, 35, 40, 0.08);
+    --bmad-shadow-lg: 0 8px 24px rgba(31, 35, 40, 0.12);
+    --bmad-shadow-elevated: 0 4px 16px rgba(31, 35, 40, 0.08), 0 0 0 1px rgba(31, 35, 40, 0.04);
+    --bmad-scrollbar-thumb: rgba(31, 35, 40, 0.2);
+    --bmad-scrollbar-thumb-hover: rgba(31, 35, 40, 0.35);
+    --bmad-shimmer: linear-gradient(
+      90deg,
+      rgba(31, 35, 40, 0) 0%,
+      rgba(31, 35, 40, 0.04) 50%,
+      rgba(31, 35, 40, 0) 100%
+    );
+  }
+
+  .dark {
+    --bmad-bg: #0a0e14;
+    --bmad-surface: #111820;
+    --bmad-surface-raised: #1a2330;
+    --bmad-border: rgba(255, 255, 255, 0.08);
+    --bmad-text: #c9d1d9;
+    --bmad-muted: #8b949e;
+    --bmad-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --bmad-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --bmad-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --bmad-shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    --bmad-scrollbar-thumb: rgba(255, 255, 255, 0.08);
+    --bmad-scrollbar-thumb-hover: rgba(255, 255, 255, 0.15);
+    --bmad-shimmer: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+  }
+
+  html {
+    @apply bg-bmad-bg text-bmad-text;
+    transition: background-color 200ms ease-out, color 200ms ease-out;
+  }
+  body {
+    @apply h-screen w-screen overflow-hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  #root {
+    @apply h-full w-full;
+  }
+}
+
+@keyframes breathe {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.6);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes fadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes editorExpand {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+
+@layer utilities {
+  .animate-breathe {
+    animation: breathe 3s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    background: var(--bmad-shimmer);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  .animate-fade-up {
+    animation: fadeUp 0.2s ease-out forwards;
+  }
+
+  .focused-editor-enter {
+    animation: editorExpand 300ms cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  }
+
+  .animate-pulse-ring {
+    animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--bmad-scrollbar-thumb) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--bmad-scrollbar-thumb);
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: var(--bmad-scrollbar-thumb-hover);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .bg-gradient-radial {
+    background: radial-gradient(ellipse at top, rgba(99, 102, 241, 0.08) 0%, transparent 50%);
+  }
+
+  .brand-accent-line {
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, #6366f1 20%, #8b5cf6 50%, #6366f1 80%, transparent 100%);
+  }
+}

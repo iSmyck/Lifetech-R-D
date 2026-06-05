@@ -1,0 +1,157 @@
+{
+  "name": "WF-07 Validation Agent",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "id": "load-schemas",
+      "name": "Load Expected Schemas",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "parameters": {
+        "jsCode": "// Load validation prompt + quality-validation skill + agent outputs\nconst input = $input.first().json;\nconst context = {\n  system_prompt: '{{ validation prompt }}',\n  skill: '{{ quality-validation skill }}',\n  agent_outputs: input.agent_outputs || {},\n  schema_validation_results: input.schema_validation_results || { all_valid: true, issues: [] },\n  query_id: input.query_id\n};\nreturn { json: context };"
+      }
+    },
+    {
+      "id": "json-schema-validation",
+      "name": "JSON Schema Validation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [400, 500],
+      "parameters": {
+        "jsCode": "// Programmatic JSON schema validation (no LLM)\nconst outputs = $input.first().json.agent_outputs || {};\nconst requiredAgents = ['localization', 'governance', 'performance', 'content'];\nconst issues = [];\nrequiredAgents.forEach(agent => {\n  if (!outputs[agent]) {\n    issues.push({ agent, issue: 'Missing output' });\n  }\n});\nreturn { json: { schema_validation_results: { all_valid: issues.length === 0, issues } } };"
+      }
+    },
+    {
+      "id": "consistency-check",
+      "name": "Consistency Check (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [600, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_BASE_URL }}/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "claude-3-5-haiku-20241022",
+          "max_tokens": 2048,
+          "temperature": 0.0,
+          "system": "You are the Validation Agent. Perform cross-agent consistency check and risk aggregation. Output JSON only.",
+          "messages": [{"role": "user", "content": "={{ JSON.stringify($json) }}"}]
+        }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "llm-auth", "name": "LLM Auth" } }
+    },
+    {
+      "id": "check-severity",
+      "name": "Check Critical Issues",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "parameters": {
+        "rules": {
+          "rules": [
+            { "value": "valid_and_safe", "output": 0 },
+            { "value": "needs_review", "output": 1 },
+            { "value": "critical_error", "output": 2 }
+          ]
+        },
+        "dataType": "string",
+        "value1": "={{ $json.validation_status }}",
+        "fallbackOutput": 2
+      }
+    },
+    {
+      "id": "auto-repair-minor",
+      "name": "Auto-Repair Minor",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1000, 200],
+      "parameters": {
+        "jsCode": "// Auto-repair minor issues and return valid\nconst output = $input.first().json;\noutput.validation_status = 'valid_and_safe';\nreturn { json: output };"
+      }
+    },
+    {
+      "id": "return-needs-review",
+      "name": "Return Needs Review",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1000, 300],
+      "parameters": {
+        "jsCode": "// Return needs_review status\nconst output = $input.first().json;\noutput.flag_for_hitl = true;\noutput.hitl_reason = output.hitl_reason || 'Moderate issues detected';\nreturn { json: output };"
+      }
+    },
+    {
+      "id": "return-critical",
+      "name": "Return Critical Error",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1000, 400],
+      "parameters": {
+        "jsCode": "// Return critical_error status\nconst output = $input.first().json;\noutput.flag_for_hitl = true;\noutput.hitl_reason = output.hitl_reason || 'Critical issues detected';\nreturn { json: output };"
+      }
+    },
+    {
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1200, 300],
+      "parameters": {
+        "mode": "mergeByIndex"
+      }
+    },
+    {
+      "id": "return",
+      "name": "Return to Coordinator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [1400, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [[{"node": "Load Expected Schemas", "type": "main", "index": 0}]]
+    },
+    "Load Expected Schemas": {
+      "main": [[{"node": "Consistency Check (LLM)", "type": "main", "index": 0}]]
+    },
+    "JSON Schema Validation": {
+      "main": [[{"node": "Consistency Check (LLM)", "type": "main", "index": 0}]]
+    },
+    "Consistency Check (LLM)": {
+      "main": [[{"node": "Check Critical Issues", "type": "main", "index": 0}]]
+    },
+    "Check Critical Issues": {
+      "main": [
+        [{"node": "Auto-Repair Minor", "type": "main", "index": 0}],
+        [{"node": "Return Needs Review", "type": "main", "index": 0}],
+        [{"node": "Return Critical Error", "type": "main", "index": 0}]
+      ]
+    },
+    "Auto-Repair Minor": {
+      "main": [[{"node": "Merge Results", "type": "main", "index": 0}]]
+    },
+    "Return Needs Review": {
+      "main": [[{"node": "Merge Results", "type": "main", "index": 0}]]
+    },
+    "Return Critical Error": {
+      "main": [[{"node": "Merge Results", "type": "main", "index": 0}]]
+    },
+    "Merge Results": {
+      "main": [[{"node": "Return to Coordinator", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

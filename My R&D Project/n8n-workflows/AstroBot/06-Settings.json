@@ -1,0 +1,496 @@
+{
+  "name": "AstroBot 06 - Settings",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "id": "trigger-settings-06",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT full_name, birth_date, birth_time, birth_city, daily_forecast_enabled, forecast_time, language FROM users WHERE telegram_id = $1 LIMIT 1;",
+        "options": {
+          "queryParams": {
+            "parameters": [
+              { "name": "telegram_id", "value": "={{ $json.telegram_id }}" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [420, 300],
+      "id": "postgres-get-settings-06",
+      "name": "Get User Settings",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format settings display\nconst item = $input.first().json;\nconst user = item.body?.[0];\n\nif (!user) {\n  return [{\n    json: {\n      ...item,\n      settings_found: false\n    }\n  }];\n}\n\nconst forecastStatus = user.daily_forecast_enabled ? 'Вкл ✅' : 'Выкл ❌';\nconst forecastTime = user.forecast_time || '07:00';\n\nreturn [{\n  json: {\n    ...item,\n    settings_found: true,\n    user,\n    settings_text: `⚙️ Настройки\\n\\n👤 Имя: ${user.full_name}\\n📅 Дата рождения: ${user.birth_date}\\n🌍 Город: ${user.birth_city}\\n🔔 Ежедневный прогноз: ${forecastStatus}\\n🕐 Время прогноза: ${forecastTime}`,\n    forecast_enabled: user.daily_forecast_enabled\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [640, 300],
+      "id": "format-settings-06",
+      "name": "Format Settings"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "settings-found",
+              "leftValue": "={{ $json.settings_found }}",
+              "rightValue": true,
+              "operator": {
+                "name": "boolean.equals",
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [860, 300],
+      "id": "if-settings-found-06",
+      "name": "Settings Found?"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "Сначала нужно пройти регистрацию. Используйте /start",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1080, 380],
+      "id": "telegram-no-settings-06",
+      "name": "No Settings Message",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "={{ $json.settings_text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "keyboard": [
+            [
+              {
+                "text": "🔄 Изменить данные",
+                "callback_data": "reset_data"
+              },
+              {
+                "text": "🔔 Вкл/Выкл прогноз",
+                "callback_data": "toggle_forecast"
+              }
+            ],
+            [
+              {
+                "text": "🕐 Время прогноза",
+                "callback_data": "forecast_time"
+              },
+              {
+                "text": "🔙 Главное меню",
+                "callback_data": "main_menu"
+              }
+            ]
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1080, 220],
+      "id": "telegram-settings-menu-06",
+      "name": "Send Settings Menu",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "toggle-forecast",
+              "leftValue": "={{ $json.callback_data }}",
+              "rightValue": "toggle_forecast",
+              "operator": {
+                "name": "string.equals",
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1300, 300],
+      "id": "if-toggle-forecast-06",
+      "name": "Toggle Forecast?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE users SET daily_forecast_enabled = NOT daily_forecast_enabled WHERE telegram_id = $1 RETURNING daily_forecast_enabled;",
+        "options": {
+          "queryParams": {
+            "parameters": [
+              { "name": "telegram_id", "value": "={{ $json.telegram_id }}" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [1520, 260],
+      "id": "postgres-toggle-forecast-06",
+      "name": "Toggle Forecast DB",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get new forecast status\nconst item = $input.first().json;\nconst newStatus = item.body?.[0]?.daily_forecast_enabled;\nconst statusText = newStatus ? 'включен ✅' : 'выключен ❌';\n\nreturn [{\n  json: {\n    ...item,\n    status_text: statusText\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1740, 260],
+      "id": "format-status-06",
+      "name": "Format Status"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "={{ 'Ежедневный прогноз ' + $json.status_text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "keyboard": [
+            [
+              {
+                "text": "🔙 Назад к настройкам",
+                "callback_data": "settings"
+              }
+            ]
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1960, 260],
+      "id": "telegram-status-msg-06",
+      "name": "Send Status Message",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "reset-data",
+              "leftValue": "={{ $json.callback_data }}",
+              "rightValue": "reset_data",
+              "operator": {
+                "name": "string.equals",
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1300, 420],
+      "id": "if-reset-data-06",
+      "name": "Reset Data?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM users WHERE telegram_id = $1;",
+        "options": {
+          "queryParams": {
+            "parameters": [
+              { "name": "telegram_id", "value": "={{ $json.telegram_id }}" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [1520, 400],
+      "id": "postgres-delete-user-06",
+      "name": "Delete User Data",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ 'astrobot:user:' + $json.telegram_id + ':state' }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1740, 400],
+      "id": "redis-del-reset-06",
+      "name": "Redis Delete State",
+      "credentials": {
+        "redis": {
+          "id": "REDIS_CONNECTION",
+          "name": "Redis Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "🔄 Ваши данные удалены. Отправьте /start для новой регистрации.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1960, 400],
+      "id": "telegram-reset-done-06",
+      "name": "Send Reset Done",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "Данная функция будет доступна в следующем обновлении.",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "keyboard": [
+            [
+              {
+                "text": "🔙 Назад к настройкам",
+                "callback_data": "settings"
+              }
+            ]
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1520, 520],
+      "id": "telegram-not-implemented-06",
+      "name": "Not Implemented",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get User Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get User Settings": {
+      "main": [
+        [
+          {
+            "node": "Format Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Settings": {
+      "main": [
+        [
+          {
+            "node": "Settings Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings Found?": {
+      "main": [
+        [
+          {
+            "node": "Send Settings Menu",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Settings Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Settings Menu": {
+      "main": [
+        [
+          {
+            "node": "Toggle Forecast?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Toggle Forecast?": {
+      "main": [
+        [
+          {
+            "node": "Toggle Forecast DB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reset Data?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Toggle Forecast DB": {
+      "main": [
+        [
+          {
+            "node": "Format Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Status": {
+      "main": [
+        [
+          {
+            "node": "Send Status Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reset Data?": {
+      "main": [
+        [
+          {
+            "node": "Delete User Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Implemented",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete User Data": {
+      "main": [
+        [
+          {
+            "node": "Redis Delete State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Delete State": {
+      "main": [
+        [
+          {
+            "node": "Send Reset Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "AstroBot 07 - Error Handler"
+  },
+  "staticData": null,
+  "tags": ["astrobot", "settings"]
+}

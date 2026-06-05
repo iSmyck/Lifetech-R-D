@@ -1,0 +1,657 @@
+{
+  "name": "AstroBot 01 - Telegram Router",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "id": "telegram-trigger-01",
+      "name": "Telegram Trigger",
+      "webhookId": "astrobot-webhook",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract core fields from Telegram update\nconst update = $input.first().json;\n\nlet telegramId = null;\nlet messageType = 'unknown';\nlet text = '';\nlet callbackData = '';\nlet messageId = null;\nlet username = '';\nlet fullName = '';\n\nif (update.message) {\n  messageType = 'message';\n  telegramId = update.message.from.id;\n  text = update.message.text || '';\n  messageId = update.message.message_id;\n  username = update.message.from.username || '';\n  fullName = [update.message.from.first_name || '', update.message.from.last_name || ''].join(' ').trim();\n} else if (update.callback_query) {\n  messageType = 'callback_query';\n  telegramId = update.callback_query.from.id;\n  callbackData = update.callback_query.data || '';\n  messageId = update.callback_query.message?.message_id;\n  username = update.callback_query.from.username || '';\n  fullName = [update.callback_query.from.first_name || '', update.callback_query.from.last_name || ''].join(' ').trim();\n}\n\nreturn [{\n  json: {\n    telegram_id: telegramId,\n    message_type: messageType,\n    text: text,\n    callback_data: callbackData,\n    message_id: messageId,\n    username,\n    full_name: fullName,\n    raw_update: update\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "id": "extract-fields-01",
+      "name": "Extract Fields"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "={{ 'astrobot:user:' + $json.telegram_id + ':state' }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "id": "redis-get-state-01",
+      "name": "Redis Get State",
+      "credentials": {
+        "redis": {
+          "id": "REDIS_CONNECTION",
+          "name": "Redis Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Redis state or default to INIT\nconst redisValue = $input.first().json.value;\nlet state = { current_state: 'INIT', data: {} };\n\nif (redisValue) {\n  try {\n    state = JSON.parse(redisValue);\n  } catch (e) {\n    state = { current_state: 'INIT', data: {} };\n  }\n}\n\nconst item = $input.first().json;\n\n// Handle commands override\nconst command = item.text?.startsWith('/') ? item.text.split(' ')[0] : '';\nlet route = 'state_based';\n\nif (command === '/start') {\n  route = 'registration';\n} else if (command === '/reset') {\n  route = 'reset';\n} else if (['/menu', '/chart', '/question', '/forecast', '/settings', '/help'].includes(command)) {\n  route = 'command';\n} else if (item.callback_data) {\n  route = 'callback';\n}\n\nreturn [{\n  json: {\n    ...item,\n    user_state: state.current_state,\n    state_data: state.data,\n    command: command,\n    route: route\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "id": "parse-state-01",
+      "name": "Parse State & Route"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "value": "={{ $json.route }}",
+              "conditions": [
+                {
+                  "value": "registration",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                },
+                {
+                  "value": "={{ $json.user_state }}",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals",
+                    "rightValue": "INIT"
+                  }
+                },
+                {
+                  "value": "={{ $json.user_state }}",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals",
+                    "rightValue": "ASK_NAME"
+                  }
+                }
+              ],
+              "combinator": "or"
+            },
+            {
+              "value": "={{ $json.route }}",
+              "conditions": [
+                {
+                  "value": "state_based",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                },
+                {
+                  "value": "callback",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "or"
+            },
+            {
+              "value": "={{ $json.route }}",
+              "conditions": [
+                {
+                  "value": "command",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            },
+            {
+              "value": "={{ $json.route }}",
+              "conditions": [
+                {
+                  "value": "reset",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [1140, 300],
+      "id": "switch-router-01",
+      "name": "Switch Router"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1380, 100],
+      "id": "exec-registration-01",
+      "name": "User Registration"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Route based on state or callback for state-based flow\nconst item = $input.first().json;\nconst state = item.user_state;\nconst cb = item.callback_data;\nconst cmd = item.command;\n\nlet target = 'unknown';\n\nif (['ASK_NAME', 'ASK_BIRTH_DATE', 'ASK_BIRTH_TIME', 'ASK_BIRTH_PLACE', 'CALCULATING_CHART'].includes(state)) {\n  target = 'continue_registration';\n} else if (state === 'AWAITING_QUESTION' || cb === 'ask_question') {\n  target = 'free_question';\n} else if (state === 'MENU_MAIN' || cb === 'main_menu') {\n  if (cb === 'natal_chart' || cmd === '/chart') {\n    target = 'natal_chart';\n  } else if (cb === 'daily_forecast' || cmd === '/forecast') {\n    target = 'daily_forecast';\n  } else if (cb === 'compatibility') {\n    target = 'compatibility';\n  } else if (cb === 'settings' || cmd === '/settings') {\n    target = 'settings';\n  } else if (cmd === '/question') {\n    target = 'free_question';\n  } else if (cmd === '/help') {\n    target = 'help';\n  } else if (item.text || cb === 'main_menu') {\n    target = 'main_menu';\n  }\n} else {\n  target = 'main_menu';\n}\n\nreturn [{\n  json: {\n    ...item,\n    target: target\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1380, 300],
+      "id": "route-callback-01",
+      "name": "Route Callback/State"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "value": "={{ $json.target }}",
+              "conditions": [
+                {
+                  "value": "continue_registration",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            },
+            {
+              "value": "={{ $json.target }}",
+              "conditions": [
+                {
+                  "value": "natal_chart",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            },
+            {
+              "value": "={{ $json.target }}",
+              "conditions": [
+                {
+                  "value": "free_question",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            },
+            {
+              "value": "={{ $json.target }}",
+              "conditions": [
+                {
+                  "value": "daily_forecast",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            },
+            {
+              "value": "={{ $json.target }}",
+              "conditions": [
+                {
+                  "value": "settings",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            },
+            {
+              "value": "={{ $json.target }}",
+              "conditions": [
+                {
+                  "value": "compatibility",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            },
+            {
+              "value": "={{ $json.target }}",
+              "conditions": [
+                {
+                  "value": "help",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [1620, 300],
+      "id": "switch-target-01",
+      "name": "Switch Target"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1860, 140],
+      "id": "exec-continue-reg-01",
+      "name": "Continue Registration"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1860, 260],
+      "id": "exec-natal-chart-01",
+      "name": "Natal Chart Reading"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1860, 380],
+      "id": "exec-free-question-01",
+      "name": "Free Question"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1860, 500],
+      "id": "exec-daily-forecast-01",
+      "name": "Daily Forecast"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1860, 620],
+      "id": "exec-settings-01",
+      "name": "Settings"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "❤️ Совместимость будет доступна в Phase 2.",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "keyboard": [
+            [
+              {
+                "text": "🔙 Главное меню",
+                "callback_data": "main_menu"
+              }
+            ]
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1860, 740],
+      "id": "telegram-compat-placeholder-01",
+      "name": "Compat Placeholder",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "📚 Доступные команды:\n/start — начало работы\n/menu — главное меню\n/chart — натальная карта\n/question — задать вопрос\n/forecast — прогноз на сегодня\n/settings — настройки\n/reset — сбросить данные\n/help — эта справка",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "keyboard": [
+            [
+              {
+                "text": "🔙 Главное меню",
+                "callback_data": "main_menu"
+              }
+            ]
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1860, 860],
+      "id": "telegram-help-01",
+      "name": "Send Help",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle /reset: delete user data and Redis state\nconst item = $input.first().json;\nreturn [{\n  json: {\n    ...item,\n    reset_requested: true\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1380, 500],
+      "id": "prepare-reset-01",
+      "name": "Prepare Reset"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM users WHERE telegram_id = $1;",
+        "options": {
+          "queryParams": {
+            "parameters": [
+              { "name": "telegram_id", "value": "={{ $json.telegram_id }}" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [1620, 500],
+      "id": "postgres-delete-user-01",
+      "name": "Delete User",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ 'astrobot:user:' + $json.telegram_id + ':state' }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1840, 500],
+      "id": "redis-del-reset-01",
+      "name": "Redis Delete State",
+      "credentials": {
+        "redis": {
+          "id": "REDIS_CONNECTION",
+          "name": "Redis Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "🔄 Ваши данные удалены. Отправьте /start для новой регистрации.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [2060, 500],
+      "id": "telegram-reset-done-01",
+      "name": "Send Reset Done",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "rateLimit",
+        "key": "={{ 'astrobot:ratelimit:' + $json.telegram_id }}",
+        "limit": 1,
+        "window": 60
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1140, 60],
+      "id": "redis-ratelimit-01",
+      "name": "Rate Limit Check",
+      "credentials": {
+        "redis": {
+          "id": "REDIS_CONNECTION",
+          "name": "Redis Connection"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Fields": {
+      "main": [
+        [
+          {
+            "node": "Redis Get State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Get State": {
+      "main": [
+        [
+          {
+            "node": "Parse State & Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse State & Route": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Switch Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Router": {
+      "main": [
+        [
+          {
+            "node": "User Registration",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route Callback/State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route Callback/State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Reset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Callback/State": {
+      "main": [
+        [
+          {
+            "node": "Switch Target",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Target": {
+      "main": [
+        [
+          {
+            "node": "Continue Registration",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Natal Chart Reading",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Free Question",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Daily Forecast",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compat Placeholder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Help",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Reset": {
+      "main": [
+        [
+          {
+            "node": "Delete User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete User": {
+      "main": [
+        [
+          {
+            "node": "Redis Delete State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Delete State": {
+      "main": [
+        [
+          {
+            "node": "Send Reset Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "AstroBot 07 - Error Handler"
+  },
+  "staticData": null,
+  "tags": ["astrobot", "telegram", "router"]
+}

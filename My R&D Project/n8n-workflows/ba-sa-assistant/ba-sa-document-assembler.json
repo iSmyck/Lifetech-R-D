@@ -1,0 +1,105 @@
+{
+  "name": "BA/SA Assistant — Document Assembler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-exec",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Assemble final Markdown document from all sections and diagrams\nconst input = $input.first().json;\n\nconst analysis = input.analysis || {};\nconst research = input.research || {};\nconst template = input.template || {};\nconst sections = input.sections || {};\nconst diagrams = input.diagrams || {};\n\nconst title = analysis.intent_summary || 'Untitled Document';\nconst docType = template.template_type || 'requirements';\n\n// Build YAML frontmatter\nconst frontmatter = `---\\ntitle: \"${title}\"\\ntype: ${docType}\\ngenerated_at: ${new Date().toISOString()}\\nstatus: draft\\n---\\n\\n`;\n\n// Build table of contents\nconst toc = `# ${title}\\n\\n## Table of Contents\\n\\n${Object.keys(sections).map((s, i) => `${i + 1}. [${s}](#${s.toLowerCase().replace(/\\s+/g, '-')})`).join('\\n')}\\n\\n`;\n\n// Build sections\nlet body = '';\nfor (const [sectionName, sectionData] of Object.entries(sections)) {\n  const content = typeof sectionData === 'string' ? sectionData : (sectionData.content || '');\n  body += `## ${sectionName}\\n\\n${content}\\n\\n---\\n\\n`;\n}\n\n// Build diagrams section\nlet diagramsSection = '## Diagrams\\n\\n';\nconst diagramTypes = ['architecture_diagram', 'data_flow_diagram', 'er_diagram', 'sequence_diagram'];\nconst diagramLabels = ['Architecture Diagram', 'Data Flow Diagram', 'ER Diagram', 'Sequence Diagram'];\n\nfor (let i = 0; i < diagramTypes.length; i++) {\n  const diag = diagrams[diagramTypes[i]] || '';\n  if (diag && diag.trim().length > 0) {\n    diagramsSection += `### ${diagramLabels[i]}\\n\\n\\`\\`\\`mermaid\\n${diag}\\n\\`\\`\\`\\n\\n`;\n  }\n}\n\n// Combine everything\nconst markdown = frontmatter + toc + body + diagramsSection;\n\n// Generate document ID\nconst documentId = 'draft_' + Date.now();\n\nreturn [{\n  json: {\n    documentId: documentId,\n    title: title,\n    content: markdown,\n    markdown: markdown,\n    sections: Object.keys(sections),\n    diagrams: Object.keys(diagrams).filter(k => diagrams[k] && diagrams[k].trim().length > 0),\n    templateName: template.selected_template || 'Default',\n    sessionId: input.sessionId,\n    status: 'pending_review'\n  }\n}];"
+      },
+      "id": "assemble-markdown",
+      "name": "Assemble Markdown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO document_drafts (id, title, type, content, sections, diagrams, status, metadata, created_at, updated_at)\nVALUES ($1, $2, $3, $4, $5, $6, 'pending_review', $7, NOW(), NOW())\nRETURNING *;",
+        "options": {}
+      },
+      "id": "save-draft",
+      "name": "Save Draft",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        620,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-default",
+          "name": "Postgres Default"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return final result\nconst draft = $input.first().json;\nreturn [{\n  json: {\n    documentId: draft.id || draft.documentId,\n    title: draft.title,\n    content: draft.content,\n    markdown: draft.content,\n    diagrams: draft.diagrams || [],\n    status: draft.status || 'pending_review',\n    sessionId: draft.sessionId\n  }\n}];"
+      },
+      "id": "return-result",
+      "name": "Return Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Assemble Markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Markdown": {
+      "main": [
+        [
+          {
+            "node": "Save Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Draft": {
+      "main": [
+        [
+          {
+            "node": "Return Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "ba-sa-assistant",
+    "document-assembler"
+  ]
+}

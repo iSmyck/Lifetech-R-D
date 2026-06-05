@@ -1,0 +1,237 @@
+{
+  "name": "WF-01 Coordinator",
+  "nodes": [
+    {
+      "id": "webhook-receive",
+      "name": "Receive Query",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "query",
+      "path": "api/v1/query",
+      "responseMode": "responseNode",
+      "httpMethod": "POST"
+    },
+    {
+      "id": "validate-input",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "parameters": {
+        "jsCode": "// Validate input against schema\nconst input = $input.first().json;\nconst required = ['user_query'];\nconst missing = required.filter(f => !input[f]);\nif (missing.length > 0) {\n  throw new Error('Missing required fields: ' + missing.join(', '));\n}\nreturn { json: input };"
+      }
+    },
+    {
+      "id": "create-session",
+      "name": "Create Session",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [600, 300],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sessions (user_id, status, total_queries) VALUES ($1, 'active', 0) RETURNING session_id;",
+        "options": {}
+      },
+      "credentials": { "postgres": { "id": "postgres-default", "name": "Postgres Default" } }
+    },
+    {
+      "id": "assemble-context",
+      "name": "Assemble Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "parameters": {
+        "jsCode": "// Assemble context: system prompt + skills + session history\nconst input = $input.first().json;\nconst context = {\n  system_prompt: '{{ coordinator prompt }}',\n  user_query: input.user_query,\n  user_context: input.user_context || {},\n  additional_parameters: input.additional_parameters || {},\n  session_id: input.session_id\n};\nreturn { json: context };"
+      }
+    },
+    {
+      "id": "intent-classification",
+      "name": "Intent Classification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_BASE_URL }}/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "claude-3-5-sonnet-20241022",
+          "max_tokens": 4096,
+          "temperature": 0.3,
+          "system": "You are the Coordinator. Classify intent and create a high-level plan. Output JSON only.",
+          "messages": [{"role": "user", "content": "={{ JSON.stringify($json) }}"}]
+        }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "llm-auth", "name": "LLM Auth" } }
+    },
+    {
+      "id": "call-router",
+      "name": "Call Router (WF-02)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1200, 300],
+      "parameters": {
+        "workflowId": "WF-02-router",
+        "options": {}
+      }
+    },
+    {
+      "id": "receive-results",
+      "name": "Receive Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1400, 300],
+      "parameters": {
+        "jsCode": "// Collect aggregated results from Router\nconst results = $input.first().json;\nreturn { json: { ...results, stage: 'synthesize' } };"
+      }
+    },
+    {
+      "id": "synthesize-response",
+      "name": "Synthesize Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1600, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_BASE_URL }}/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "claude-3-5-sonnet-20241022",
+          "max_tokens": 4096,
+          "temperature": 0.3,
+          "system": "You are the Coordinator. Synthesize a final response from agent outputs.",
+          "messages": [{"role": "user", "content": "={{ JSON.stringify($json) }}"}]
+        }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "llm-auth", "name": "LLM Auth" } }
+    },
+    {
+      "id": "call-validation",
+      "name": "Call Validation (WF-07)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1800, 300],
+      "parameters": {
+        "workflowId": "WF-07-validation",
+        "options": {}
+      }
+    },
+    {
+      "id": "check-validation",
+      "name": "Check Validation Status",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [2000, 300],
+      "parameters": {
+        "rules": {
+          "rules": [
+            { "value": "valid_and_safe", "output": 0 },
+            { "value": "needs_review", "output": 1 },
+            { "value": "critical_error", "output": 2 }
+          ]
+        },
+        "dataType": "string",
+        "value1": "={{ $json.validation_status }}",
+        "fallbackOutput": 2
+      }
+    },
+    {
+      "id": "return-response",
+      "name": "Return Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2200, 200],
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      }
+    },
+    {
+      "id": "route-hitl",
+      "name": "Route to HITL (WF-09)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [2200, 300],
+      "parameters": {
+        "workflowId": "WF-09-hitl-flow",
+        "options": {}
+      }
+    },
+    {
+      "id": "return-error",
+      "name": "Return Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2200, 400],
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'Critical error', details: $json }) }}"
+      }
+    },
+    {
+      "id": "update-session",
+      "name": "Update Session",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2400, 200],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE sessions SET updated_at = NOW(), total_queries = total_queries + 1 WHERE session_id = $1;",
+        "options": {}
+      },
+      "credentials": { "postgres": { "id": "postgres-default", "name": "Postgres Default" } }
+    }
+  ],
+  "connections": {
+    "Receive Query": {
+      "main": [[{"node": "Validate Input", "type": "main", "index": 0}]]
+    },
+    "Validate Input": {
+      "main": [[{"node": "Create Session", "type": "main", "index": 0}]]
+    },
+    "Create Session": {
+      "main": [[{"node": "Assemble Context", "type": "main", "index": 0}]]
+    },
+    "Assemble Context": {
+      "main": [[{"node": "Intent Classification", "type": "main", "index": 0}]]
+    },
+    "Intent Classification": {
+      "main": [[{"node": "Call Router (WF-02)", "type": "main", "index": 0}]]
+    },
+    "Call Router (WF-02)": {
+      "main": [[{"node": "Receive Results", "type": "main", "index": 0}]]
+    },
+    "Receive Results": {
+      "main": [[{"node": "Synthesize Response", "type": "main", "index": 0}]]
+    },
+    "Synthesize Response": {
+      "main": [[{"node": "Call Validation (WF-07)", "type": "main", "index": 0}]]
+    },
+    "Call Validation (WF-07)": {
+      "main": [[{"node": "Check Validation Status", "type": "main", "index": 0}]]
+    },
+    "Check Validation Status": {
+      "main": [
+        [{"node": "Return Response", "type": "main", "index": 0}],
+        [{"node": "Route to HITL (WF-09)", "type": "main", "index": 0}],
+        [{"node": "Return Error", "type": "main", "index": 0}]
+      ]
+    },
+    "Return Response": {
+      "main": [[{"node": "Update Session", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "WF-error-handler"
+  }
+}

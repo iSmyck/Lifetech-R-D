@@ -1,0 +1,11 @@
+model_list:
+  - model_name: llama-3.1-8b
+    litellm_params:
+      model: openai/meta-llama/Meta-Llama-3.1-8B-Instruct
+      api_base: http://gpu-node:8000/v1
+      api_key: "fake-key"
+
+general_settings:
+  master_key: "sk-bmad-master"
+  proxy_batch_write_at: 60
+  alert_to_email: "admin@company.com"

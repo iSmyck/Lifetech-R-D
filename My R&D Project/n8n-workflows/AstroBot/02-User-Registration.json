@@ -1,0 +1,1038 @@
+{
+  "name": "AstroBot 02 - User Registration",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300],
+      "id": "trigger-reg-02",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determine registration step based on current state\nconst item = $input.first().json;\nconst state = item.user_state || 'INIT';\nconst text = item.text || '';\n\nlet nextAction = 'unknown';\n\nif (state === 'INIT' || text === '/start') {\n  nextAction = 'start_registration';\n} else if (state === 'ASK_NAME') {\n  nextAction = 'process_name';\n} else if (state === 'ASK_BIRTH_DATE') {\n  nextAction = 'process_birth_date';\n} else if (state === 'ASK_BIRTH_TIME') {\n  nextAction = 'process_birth_time';\n} else if (state === 'ASK_BIRTH_PLACE') {\n  nextAction = 'process_birth_place';\n} else if (state === 'CALCULATING_CHART') {\n  nextAction = 'calculate_chart';\n}\n\nreturn [{\n  json: {\n    ...item,\n    next_action: nextAction\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 300],
+      "id": "determine-step-02",
+      "name": "Determine Step"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "value": "={{ $json.next_action }}",
+              "conditions": [
+                {
+                  "value": "start_registration",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            },
+            {
+              "value": "={{ $json.next_action }}",
+              "conditions": [
+                {
+                  "value": "process_name",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            },
+            {
+              "value": "={{ $json.next_action }}",
+              "conditions": [
+                {
+                  "value": "process_birth_date",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            },
+            {
+              "value": "={{ $json.next_action }}",
+              "conditions": [
+                {
+                  "value": "process_birth_time",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            },
+            {
+              "value": "={{ $json.next_action }}",
+              "conditions": [
+                {
+                  "value": "process_birth_place",
+                  "operator": {
+                    "type": "string",
+                    "operation": "equals"
+                  }
+                }
+              ],
+              "combinator": "and"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [640, 300],
+      "id": "switch-step-02",
+      "name": "Switch Step"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ 'astrobot:user:' + $json.telegram_id + ':state' }}",
+        "expire": true,
+        "ttl": 3600,
+        "value": "={{ JSON.stringify({ current_state: 'ASK_NAME', data: {}, last_interaction: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [860, 60],
+      "id": "redis-start-02",
+      "name": "Redis Set ASK_NAME",
+      "credentials": {
+        "redis": {
+          "id": "REDIS_CONNECTION",
+          "name": "Redis Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "✨ Добро пожаловать в AstroBot!\n\nЯ ваш персональный астрологический ассистент. Чтобы составить вашу натальную карту, мне нужно задать несколько вопросов.\n\nКак вас зовут? (можно псевдоним)",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1080, 60],
+      "id": "telegram-welcome-02",
+      "name": "Send Welcome",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate name\nconst item = $input.first().json;\nconst name = (item.text || '').trim();\n\nconst isValid = name.length >= 2 && name.length <= 50 && /^[\\p{L}\\s\\-'.]+$/u.test(name);\n\nreturn [{\n  json: {\n    ...item,\n    name_valid: isValid,\n    name_value: name\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 180],
+      "id": "validate-name-02",
+      "name": "Validate Name"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "name-valid",
+              "leftValue": "={{ $json.name_valid }}",
+              "rightValue": true,
+              "operator": {
+                "name": "boolean.equals",
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1080, 180],
+      "id": "if-name-valid-02",
+      "name": "Name Valid?"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ 'astrobot:user:' + $json.telegram_id + ':state' }}",
+        "expire": true,
+        "ttl": 3600,
+        "value": "={{ JSON.stringify({ current_state: 'ASK_BIRTH_DATE', data: { full_name: $json.name_value }, last_interaction: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1320, 140],
+      "id": "redis-ask-date-02",
+      "name": "Redis Set ASK_DATE",
+      "credentials": {
+        "redis": {
+          "id": "REDIS_CONNECTION",
+          "name": "Redis Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "={{ \"Приятно познакомиться, \" + $json.name_value + \"! 🌟\\n\\nТеперь введите вашу дату рождения в формате:\\n📅 ДД.ММ.ГГГГ\\n\\nНапример: 15.06.1990\" }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1560, 140],
+      "id": "telegram-ask-date-02",
+      "name": "Ask Birth Date",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "Имя должно быть от 2 до 50 символов и содержать только буквы. Попробуйте ещё раз.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1320, 220],
+      "id": "telegram-name-invalid-02",
+      "name": "Name Invalid",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate date DD.MM.YYYY\nconst item = $input.first().json;\nconst text = (item.text || '').trim();\nconst regex = /^(\\d{2})\\.(\\d{2})\\.(\\d{4})$/;\nconst match = text.match(regex);\n\nlet isValid = false;\nlet dateParts = null;\nlet dateIso = null;\n\nif (match) {\n  const day = parseInt(match[1], 10);\n  const month = parseInt(match[2], 10);\n  const year = parseInt(match[3], 10);\n  \n  const date = new Date(year, month - 1, day);\n  if (date.getDate() === day && date.getMonth() === month - 1 && year >= 1900 && year <= 2025) {\n    isValid = true;\n    dateParts = { day, month, year };\n    dateIso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;\n  }\n}\n\nreturn [{\n  json: {\n    ...item,\n    date_valid: isValid,\n    date_parts: dateParts,\n    date_iso: dateIso\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 340],
+      "id": "validate-date-02",
+      "name": "Validate Date"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "date-valid",
+              "leftValue": "={{ $json.date_valid }}",
+              "rightValue": true,
+              "operator": {
+                "name": "boolean.equals",
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1080, 340],
+      "id": "if-date-valid-02",
+      "name": "Date Valid?"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ 'astrobot:user:' + $json.telegram_id + ':state' }}",
+        "expire": true,
+        "ttl": 3600,
+        "value": "={{ JSON.stringify({ current_state: 'ASK_BIRTH_TIME', data: { ...$json.state_data, birth_date: $json.date_iso }, last_interaction: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1320, 300],
+      "id": "redis-ask-time-02",
+      "name": "Redis Set ASK_TIME",
+      "credentials": {
+        "redis": {
+          "id": "REDIS_CONNECTION",
+          "name": "Redis Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "Отлично! 🕐\n\nТеперь введите время рождения в формате:\nЧЧ:ММ (24-часовой формат)\n\nНапример: 14:30\n\nЕсли не знаете точное время, введите 12:00 — я рассчитаю карту за полдень.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1560, 300],
+      "id": "telegram-ask-time-02",
+      "name": "Ask Birth Time",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "Некорректная дата. Используйте формат ДД.ММ.ГГГГ (например, 15.06.1990).",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1320, 380],
+      "id": "telegram-date-invalid-02",
+      "name": "Date Invalid",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate time HH:MM\nconst item = $input.first().json;\nconst text = (item.text || '').trim();\nconst regex = /^(\\d{1,2}):(\\d{2})$/;\nconst match = text.match(regex);\n\nlet isValid = false;\nlet timeParts = null;\nlet timeValue = null;\n\nif (match) {\n  const hour = parseInt(match[1], 10);\n  const minute = parseInt(match[2], 10);\n  if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {\n    isValid = true;\n    timeParts = { hour, minute };\n    timeValue = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;\n  }\n}\n\nreturn [{\n  json: {\n    ...item,\n    time_valid: isValid,\n    time_parts: timeParts,\n    time_value: timeValue\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [860, 480],
+      "id": "validate-time-02",
+      "name": "Validate Time"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "time-valid",
+              "leftValue": "={{ $json.time_valid }}",
+              "rightValue": true,
+              "operator": {
+                "name": "boolean.equals",
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1080, 480],
+      "id": "if-time-valid-02",
+      "name": "Time Valid?"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ 'astrobot:user:' + $json.telegram_id + ':state' }}",
+        "expire": true,
+        "ttl": 3600,
+        "value": "={{ JSON.stringify({ current_state: 'ASK_BIRTH_PLACE', data: { ...$json.state_data, birth_time: $json.time_value }, last_interaction: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1320, 440],
+      "id": "redis-ask-place-02",
+      "name": "Redis Set ASK_PLACE",
+      "credentials": {
+        "redis": {
+          "id": "REDIS_CONNECTION",
+          "name": "Redis Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "Последний шаг! 🌍\n\nВведите город рождения:\n\nНапример: Москва\n\nЯ автоматически определю координаты и часовой пояс.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1560, 440],
+      "id": "telegram-ask-place-02",
+      "name": "Ask Birth Place",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "Некорректное время. Используйте формат ЧЧ:ММ (например, 14:30).",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1320, 520],
+      "id": "telegram-time-invalid-02",
+      "name": "Time Invalid",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent($json.text) + '&format=json&limit=1' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "AstroBot/1.0"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [860, 620],
+      "id": "geocode-02",
+      "name": "Geocode City"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse geocoding response\nconst item = $input.first().json;\nconst geoData = item.body || [];\n\nlet geocoded = false;\nlet lat = null;\nlet lon = null;\nlet displayName = '';\nlet nation = '';\nlet timezone = 'UTC';\n\nif (geoData.length > 0) {\n  const place = geoData[0];\n  lat = parseFloat(place.lat);\n  lon = parseFloat(place.lon);\n  displayName = place.display_name;\n  \n  // Extract country code from display name (fallback logic)\n  const parts = displayName.split(', ');\n  const lastPart = parts[parts.length - 1];\n  // Simple mapping for common countries\n  const countryMap = {\n    'Russia': 'RU', 'Russian Federation': 'RU',\n    'United States': 'US', 'USA': 'US',\n    'United Kingdom': 'GB', 'Great Britain': 'GB',\n    'Germany': 'DE', 'France': 'FR', 'Italy': 'IT',\n    'Spain': 'ES', 'Ukraine': 'UA', 'Belarus': 'BY',\n    'Kazakhstan': 'KZ', 'Poland': 'PL', 'Turkey': 'TR'\n  };\n  nation = countryMap[lastPart] || 'RU';\n  \n  // Simple timezone estimation by longitude\n  const offset = Math.round(lon / 15);\n  const sign = offset >= 0 ? '+' : '-';\n  const absOffset = Math.abs(offset);\n  timezone = `Etc/GMT${sign}${absOffset}`;\n  \n  // Override for Russia\n  if (nation === 'RU') {\n    timezone = 'Europe/Moscow';\n  }\n  \n  geocoded = true;\n}\n\nreturn [{\n  json: {\n    ...item,\n    geocoded,\n    lat,\n    lon,\n    display_name: displayName,\n    nation,\n    timezone,\n    city: item.text\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 620],
+      "id": "parse-geocode-02",
+      "name": "Parse Geocode"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "geo-ok",
+              "leftValue": "={{ $json.geocoded }}",
+              "rightValue": true,
+              "operator": {
+                "name": "boolean.equals",
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1300, 620],
+      "id": "if-geocoded-02",
+      "name": "Geocoded?"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ 'astrobot:user:' + $json.telegram_id + ':state' }}",
+        "expire": true,
+        "ttl": 3600,
+        "value": "={{ JSON.stringify({ current_state: 'CALCULATING_CHART', data: { ...$json.state_data, birth_city: $json.city, birth_latitude: $json.lat, birth_longitude: $json.lon, birth_timezone: $json.timezone, birth_nation: $json.nation }, last_interaction: new Date().toISOString() }) }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1520, 580],
+      "id": "redis-calculating-02",
+      "name": "Redis Set CALCULATING",
+      "credentials": {
+        "redis": {
+          "id": "REDIS_CONNECTION",
+          "name": "Redis Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://astrologer.p.rapidapi.com/api/v5/context/birth-chart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RapidAPI-Host",
+              "value": "astrologer.p.rapidapi.com"
+            },
+            {
+              "name": "X-RapidAPI-Key",
+              "value": "={{ $env.ASTROLOGER_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "subject",
+              "value": "={{ JSON.stringify({ name: $json.state_data.full_name, year: parseInt($json.state_data.birth_date.split('-')[0]), month: parseInt($json.state_data.birth_date.split('-')[1]), day: parseInt($json.state_data.birth_date.split('-')[2]), hour: parseInt($json.state_data.birth_time.split(':')[0]), minute: parseInt($json.state_data.birth_time.split(':')[1]), second: 0, longitude: $json.lon, latitude: $json.lat, timezone: $json.timezone, city: $json.city, nation: $json.nation, houses_system_identifier: 'P', zodiac_type: 'Tropical' }) }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1740, 580],
+      "id": "astro-api-chart-02",
+      "name": "Astrologer API Chart"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build chart request body for SVG\nconst item = $input.first().json;\nreturn [{\n  json: {\n    ...item,\n    chart_body: {\n      subject: {\n        name: item.state_data.full_name,\n        year: parseInt(item.state_data.birth_date.split('-')[0]),\n        month: parseInt(item.state_data.birth_date.split('-')[1]),\n        day: parseInt(item.state_data.birth_date.split('-')[2]),\n        hour: parseInt(item.state_data.birth_time.split(':')[0]),\n        minute: parseInt(item.state_data.birth_time.split(':')[1]),\n        second: 0,\n        longitude: item.lon,\n        latitude: item.lat,\n        timezone: item.timezone,\n        city: item.city,\n        nation: item.nation,\n        houses_system_identifier: 'P',\n        zodiac_type: 'Tropical'\n      },\n      theme: 'dark',\n      language: 'RU',\n      style: 'modern'\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1960, 580],
+      "id": "build-svg-body-02",
+      "name": "Build SVG Body"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://astrologer.p.rapidapi.com/api/v5/chart/birth-chart",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-RapidAPI-Host",
+              "value": "astrologer.p.rapidapi.com"
+            },
+            {
+              "name": "X-RapidAPI-Key",
+              "value": "={{ $env.ASTROLOGER_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "body",
+              "value": "={{ JSON.stringify($json.chart_body) }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2180, 580],
+      "id": "astro-api-svg-02",
+      "name": "Astrologer API SVG"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO users (telegram_id, username, full_name, state, birth_date, birth_time, birth_city, birth_latitude, birth_longitude, birth_timezone, birth_nation, chart_context_xml, chart_data_json, chart_calculated_at, language)\nVALUES ($1, $2, $3, 'MENU_MAIN', $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), 'ru')\nON CONFLICT (telegram_id) DO UPDATE SET\n  full_name = EXCLUDED.full_name,\n  state = 'MENU_MAIN',\n  birth_date = EXCLUDED.birth_date,\n  birth_time = EXCLUDED.birth_time,\n  birth_city = EXCLUDED.birth_city,\n  birth_latitude = EXCLUDED.birth_latitude,\n  birth_longitude = EXCLUDED.birth_longitude,\n  birth_timezone = EXCLUDED.birth_timezone,\n  birth_nation = EXCLUDED.birth_nation,\n  chart_context_xml = EXCLUDED.chart_context_xml,\n  chart_data_json = EXCLUDED.chart_data_json,\n  chart_calculated_at = NOW(),\n  updated_at = NOW();",
+        "options": {
+          "queryParams": {
+            "parameters": [
+              { "name": "telegram_id", "value": "={{ $json.telegram_id }}" },
+              { "name": "username", "value": "={{ $json.username }}" },
+              { "name": "full_name", "value": "={{ $json.state_data.full_name }}" },
+              { "name": "birth_date", "value": "={{ $json.state_data.birth_date }}" },
+              { "name": "birth_time", "value": "={{ $json.state_data.birth_time }}" },
+              { "name": "birth_city", "value": "={{ $json.city }}" },
+              { "name": "birth_latitude", "value": "={{ $json.lat }}" },
+              { "name": "birth_longitude", "value": "={{ $json.lon }}" },
+              { "name": "birth_timezone", "value": "={{ $json.timezone }}" },
+              { "name": "birth_nation", "value": "={{ $json.nation }}" },
+              { "name": "chart_context_xml", "value": "={{ $json.body?.context || '' }}" },
+              { "name": "chart_data_json", "value": "={{ JSON.stringify($json.body?.chart_data || {}) }}" }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.3,
+      "position": [2400, 580],
+      "id": "postgres-save-user-02",
+      "name": "Save User to DB",
+      "credentials": {
+        "postgres": {
+          "id": "POSTGRES_CONNECTION",
+          "name": "PostgreSQL Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ 'astrobot:user:' + $json.telegram_id + ':state' }}"
+      },
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [2400, 700],
+      "id": "redis-del-state-02",
+      "name": "Redis Delete State",
+      "credentials": {
+        "redis": {
+          "id": "REDIS_CONNECTION",
+          "name": "Redis Connection"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "={{ \"🌟 Ваша натальная карта готова, \" + $json.state_data.full_name + \"!\" }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [2620, 540],
+      "id": "telegram-chart-ready-02",
+      "name": "Send Chart Ready",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "Выберите, что вас интересует:",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "keyboard": [
+            [
+              {
+                "text": "🌟 Натальная карта",
+                "callback_data": "natal_chart"
+              },
+              {
+                "text": "📅 Прогноз на сегодня",
+                "callback_data": "daily_forecast"
+              }
+            ],
+            [
+              {
+                "text": "❤️ Совместимость",
+                "callback_data": "compatibility"
+              },
+              {
+                "text": "⚙️ Настройки",
+                "callback_data": "settings"
+              }
+            ]
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [2840, 540],
+      "id": "telegram-main-menu-02",
+      "name": "Send Main Menu",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.telegram_id }}",
+        "text": "⚠️ Не удалось найти город. Попробуйте написать точнее (например: 'Москва, Россия').",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.1,
+      "position": [1520, 660],
+      "id": "telegram-geo-fail-02",
+      "name": "Geo Failed",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_BOT_TOKEN",
+          "name": "Telegram Bot Token"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Determine Step",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Step": {
+      "main": [
+        [
+          {
+            "node": "Switch Step",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Step": {
+      "main": [
+        [
+          {
+            "node": "Redis Set ASK_NAME",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Name",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Date",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Time",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Geocode City",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Set ASK_NAME": {
+      "main": [
+        [
+          {
+            "node": "Send Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Name": {
+      "main": [
+        [
+          {
+            "node": "Name Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Name Valid?": {
+      "main": [
+        [
+          {
+            "node": "Redis Set ASK_DATE",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Name Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Set ASK_DATE": {
+      "main": [
+        [
+          {
+            "node": "Ask Birth Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Date": {
+      "main": [
+        [
+          {
+            "node": "Date Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Date Valid?": {
+      "main": [
+        [
+          {
+            "node": "Redis Set ASK_TIME",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Date Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Set ASK_TIME": {
+      "main": [
+        [
+          {
+            "node": "Ask Birth Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Time": {
+      "main": [
+        [
+          {
+            "node": "Time Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Time Valid?": {
+      "main": [
+        [
+          {
+            "node": "Redis Set ASK_PLACE",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Time Invalid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Set ASK_PLACE": {
+      "main": [
+        [
+          {
+            "node": "Ask Birth Place",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geocode City": {
+      "main": [
+        [
+          {
+            "node": "Parse Geocode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Geocode": {
+      "main": [
+        [
+          {
+            "node": "Geocoded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geocoded?": {
+      "main": [
+        [
+          {
+            "node": "Redis Set CALCULATING",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Geo Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Set CALCULATING": {
+      "main": [
+        [
+          {
+            "node": "Astrologer API Chart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Astrologer API Chart": {
+      "main": [
+        [
+          {
+            "node": "Build SVG Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build SVG Body": {
+      "main": [
+        [
+          {
+            "node": "Astrologer API SVG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Astrologer API SVG": {
+      "main": [
+        [
+          {
+            "node": "Save User to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save User to DB": {
+      "main": [
+        [
+          {
+            "node": "Redis Delete State",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Chart Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Chart Ready": {
+      "main": [
+        [
+          {
+            "node": "Send Main Menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "AstroBot 07 - Error Handler"
+  },
+  "staticData": null,
+  "tags": ["astrobot", "registration"]
+}

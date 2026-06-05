@@ -1,0 +1,31 @@
+[     416ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4173/api/bmad/skills:0
+[     418ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4173/api/bmad/agents:0
+[     418ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4173/api/notifications/unread-count:0
+[     418ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4173/api/projects:0
+[     419ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4173/api/settings/llm:0
+[     419ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4173/api/settings/llm/providers:0
+[     436ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4173/api/projects:0
+[   30367ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4173/api/notifications/unread-count:0
+[   60352ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4173/api/notifications/unread-count:0
+[   74619ms] [ERROR] NotFoundError: Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.
+    at pm (http://localhost:4173/assets/index-g_gzE5wE.js:40:26080)
+    at Kt (http://localhost:4173/assets/index-g_gzE5wE.js:40:25767)
+    at pm (http://localhost:4173/assets/index-g_gzE5wE.js:40:26841)
+    at mt (http://localhost:4173/assets/index-g_gzE5wE.js:40:27370)
+    at mm (http://localhost:4173/assets/index-g_gzE5wE.js:40:27830)
+    at mt (http://localhost:4173/assets/index-g_gzE5wE.js:40:27520)
+    at mm (http://localhost:4173/assets/index-g_gzE5wE.js:40:27830)
+    at mt (http://localhost:4173/assets/index-g_gzE5wE.js:40:27520)
+    at mm (http://localhost:4173/assets/index-g_gzE5wE.js:40:27830)
+    at mt (http://localhost:4173/assets/index-g_gzE5wE.js:40:27520) @ http://localhost:4173/assets/index-g_gzE5wE.js:39
+[   74623ms] NotFoundError: Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node.
+    at pm (http://localhost:4173/assets/index-g_gzE5wE.js:40:26080)
+    at Kt (http://localhost:4173/assets/index-g_gzE5wE.js:40:25767)
+    at pm (http://localhost:4173/assets/index-g_gzE5wE.js:40:26841)
+    at mt (http://localhost:4173/assets/index-g_gzE5wE.js:40:27370)
+    at mm (http://localhost:4173/assets/index-g_gzE5wE.js:40:27830)
+    at mt (http://localhost:4173/assets/index-g_gzE5wE.js:40:27520)
+    at mm (http://localhost:4173/assets/index-g_gzE5wE.js:40:27830)
+    at mt (http://localhost:4173/assets/index-g_gzE5wE.js:40:27520)
+    at mm (http://localhost:4173/assets/index-g_gzE5wE.js:40:27830)
+    at mt (http://localhost:4173/assets/index-g_gzE5wE.js:40:27520)

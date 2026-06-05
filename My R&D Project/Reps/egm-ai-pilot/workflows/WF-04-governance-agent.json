@@ -1,0 +1,92 @@
+{
+  "name": "WF-04 Governance Agent",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "id": "assemble-context",
+      "name": "Assemble Governance Context",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "parameters": {
+        "jsCode": "// Load governance prompt + compliance-screening skill\nconst input = $input.first().json;\nconst context = {\n  system_prompt: '{{ governance prompt }}',\n  skill: '{{ compliance-screening skill }}',\n  content_to_review: input.content_to_review || {},\n  target_market: input.target_market || {},\n  query_id: input.query_id\n};\nreturn { json: context };"
+      }
+    },
+    {
+      "id": "compliance-screening",
+      "name": "Compliance Screening (LLM)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [600, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_BASE_URL }}/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "claude-3-5-sonnet-20241022",
+          "max_tokens": 4096,
+          "temperature": 0.1,
+          "system": "You are the Governance / Compliance Agent. Perform evidence-gated compliance screening. Output JSON only.",
+          "messages": [{"role": "user", "content": "={{ JSON.stringify($json) }}"}]
+        }
+      },
+      "credentials": { "httpHeaderAuth": { "id": "llm-auth", "name": "LLM Auth" } }
+    },
+    {
+      "id": "validate-output",
+      "name": "Validate Output Schema",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "parameters": {
+        "jsCode": "// Validate against governance-output schema\nconst response = $input.first().json;\nconst content = response.content?.[0]?.text || response.content || '{}';\nlet output;\ntry {\n  output = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (e) {\n  output = { query_id: $json.query_id, error: 'Invalid JSON output' };\n}\nreturn { json: output };"
+      }
+    },
+    {
+      "id": "check-critical",
+      "name": "Check Critical Flags",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1000, 300],
+      "parameters": {
+        "jsCode": "// Check for critical flags and set flag_for_hitl if needed\nconst output = $input.first().json;\nconst hasCritical = (output.compliance_report?.egm_ai_policy_redlines_violations?.length > 0) ||\n                    (output.compliance_report?.overall_status === 'non_compliant');\noutput.flag_for_hitl = hasCritical;\noutput.agent_name = 'governance';\noutput.model_used = 'claude-3-5-sonnet-20241022';\nreturn { json: output };"
+      }
+    },
+    {
+      "id": "return",
+      "name": "Return to Router",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [1200, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [[{"node": "Assemble Governance Context", "type": "main", "index": 0}]]
+    },
+    "Assemble Governance Context": {
+      "main": [[{"node": "Compliance Screening (LLM)", "type": "main", "index": 0}]]
+    },
+    "Compliance Screening (LLM)": {
+      "main": [[{"node": "Validate Output Schema", "type": "main", "index": 0}]]
+    },
+    "Validate Output Schema": {
+      "main": [[{"node": "Check Critical Flags", "type": "main", "index": 0}]]
+    },
+    "Check Critical Flags": {
+      "main": [[{"node": "Return to Router", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
